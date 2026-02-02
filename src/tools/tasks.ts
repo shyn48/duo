@@ -120,6 +120,15 @@ export function registerTaskTools(server: McpServer) {
           id,
           status as TaskStatus,
         );
+
+        // Log task status change
+        await state.logChat(
+          "system",
+          "event",
+          `Task [${id}] status → ${status}`,
+          id,
+        );
+
         const statusIcons: Record<string, string> = {
           todo: "⬜",
           in_progress: "🔵",
@@ -178,6 +187,15 @@ export function registerTaskTools(server: McpServer) {
           id,
           assignee as TaskAssignee,
         );
+
+        // Log task reassignment
+        await state.logChat(
+          "system",
+          "event",
+          `Task [${id}] reassigned to ${assignee}`,
+          id,
+        );
+
         const icon = assignee === "human" ? "🧑" : "🤖";
 
         return {
