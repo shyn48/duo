@@ -15,6 +15,7 @@ import type {
   SessionPhase,
   DesignDocument,
   UserPreferences,
+  SubagentInfo,
   DEFAULT_CONFIG,
   DuoEvent,
 } from "./types.js";
@@ -50,6 +51,7 @@ export class DuoState {
       taskBoard: { tasks: [], createdAt: now(), updatedAt: now() },
       design: null,
       preferences: { humanPrefers: [], aiPrefers: [], overrides: {} },
+      subagents: [],
       startedAt: now(),
       updatedAt: now(),
     };
@@ -79,6 +81,10 @@ export class DuoState {
     if (existsSync(sessionPath)) {
       const data = await readFile(sessionPath, "utf-8");
       this.session = JSON.parse(data);
+      // Ensure subagents array exists (backward compat with v0.1.0 state)
+      if (!this.session.subagents) {
+        this.session.subagents = [];
+      }
     }
 
     // Load preferences if they exist
@@ -266,6 +272,26 @@ export class DuoState {
     output += `\n── Progress: ${done}/${tasks.length} tasks complete ──`;
 
     return output;
+  }
+
+  // ── Subagent Tracking ──
+
+  async addSubagent(info: SubagentInfo): Promise<void> {
+    if (!this.session.subagents) {
+      this.session.subagents = [];
+    }
+    this.session.subagents.push(info);
+    await this.save();
+  }
+
+  getSubagents(): SubagentInfo[] {
+    return this.session.subagents ?? [];
+  }
+
+  // ── State Directory ──
+
+  getStateDir(): string {
+    return this.stateDir;
   }
 
   // ── Session Info ──
