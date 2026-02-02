@@ -80,7 +80,7 @@ WORKFLOW:
   4. Review   — Cross-review each other's code
   5. Integrate — Merge, test, commit
 
-Learn more: https://github.com/shyn48/jarvis/tree/main/projects/duo
+Learn more: https://github.com/shyn48/duo
 `);
 }
 
