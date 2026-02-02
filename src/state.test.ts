@@ -237,6 +237,39 @@ describe("Task board formatting", () => {
   });
 });
 
+describe("Checkpoint support", () => {
+  it("should create a checkpoint", async () => {
+    await state.setPhase("executing");
+    await state.addTask("1", "Test", "human", ["file.ts"]);
+
+    const filename = await state.checkpoint("test context");
+    expect(filename).toMatch(/^checkpoint-.*\.jsonl$/);
+  });
+
+  it("should increment message count on checkpoint", async () => {
+    expect(state.getMessageCount()).toBe(0);
+    await state.checkpoint("first");
+    expect(state.getMessageCount()).toBe(1);
+    await state.checkpoint("second");
+    expect(state.getMessageCount()).toBe(2);
+  });
+});
+
+describe("Chat logging", () => {
+  it("should log chat entries via state", async () => {
+    await state.logChat("system", "event", "Session started");
+    await state.logChat("human", "message", "Hello", "T1");
+
+    const logger = state.getChatLogger();
+    expect(logger).not.toBeNull();
+
+    const history = await logger!.getHistory();
+    expect(history).toHaveLength(2);
+    expect(history[0].from).toBe("system");
+    expect(history[1].taskId).toBe("T1");
+  });
+});
+
 describe("Session cleanup", () => {
   it("should clear .duo directory", async () => {
     await state.addTask("1", "Task", "human");
