@@ -1,7 +1,7 @@
 {
   "name": "@duo-dev/mcp-server",
   "version": "0.1.0",
-  "description": "Duo — Collaborative pair programming MCP server. Split coding tasks between human and AI for better code quality, codebase understanding, and enjoyability.",
+  "description": "Duo \u2014 Collaborative pair programming MCP server. Split coding tasks between human and AI for better code quality, codebase understanding, and enjoyability.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -14,14 +14,15 @@
     "SPEC.md"
   ],
   "scripts": {
-    "build": "tsc && cp src/dashboard/index.html dist/dashboard/",
+    "build": "tsc && cp src/dashboard/index.html dist/dashboard/ && npm run bundle",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
     "cli": "node dist/cli.js",
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "bundle": "esbuild dist/cli.js --bundle --platform=node --format=esm --outfile=dist/bundle/cli.mjs --external:node:* && esbuild dist/index.js --bundle --platform=node --format=esm --outfile=dist/bundle/index.mjs --external:node:* && cp dist/dashboard/index.html dist/bundle/"
   },
   "keywords": [
     "mcp",
@@ -47,6 +48,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.19.7",
+    "esbuild": "^0.27.2",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }
