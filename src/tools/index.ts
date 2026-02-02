@@ -8,6 +8,7 @@ import { registerTaskTools } from "./tasks.js";
 import { registerReviewTools } from "./review.js";
 import { registerSubagentTools } from "./subagent.js";
 import { registerDocumentTools } from "./document.js";
+import { registerRecoverTools } from "./recover.js";
 
 export function registerTools(server: McpServer) {
   registerSessionTools(server);
@@ -15,4 +16,5 @@ export function registerTools(server: McpServer) {
   registerReviewTools(server);
   registerSubagentTools(server);
   registerDocumentTools(server);
+  registerRecoverTools(server);
 }
