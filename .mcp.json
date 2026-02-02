@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "duo": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli.js"],
+      "cwd": "${CLAUDE_PLUGIN_ROOT}"
+    }
+  }
+}

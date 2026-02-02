@@ -1,0 +1,14 @@
+{
+  "name": "duo",
+  "version": "0.1.0",
+  "description": "Collaborative pair programming — split coding tasks between human and AI for better code quality and codebase understanding",
+  "author": {
+    "name": "Shayan",
+    "email": "shayanfall79@gmail.com",
+    "url": "https://github.com/shyn48"
+  },
+  "homepage": "https://github.com/shyn48/duo",
+  "repository": "https://github.com/shyn48/duo",
+  "license": "MIT",
+  "keywords": ["pair-programming", "collaborative-coding", "code-review", "mcp", "task-management"]
+}

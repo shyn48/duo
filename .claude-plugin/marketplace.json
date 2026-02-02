@@ -1,0 +1,21 @@
+{
+  "name": "shyn48-duo",
+  "owner": {
+    "name": "Shayan",
+    "email": "shayanfall79@gmail.com"
+  },
+  "metadata": {
+    "description": "Duo — Collaborative pair programming plugin for Claude Code"
+  },
+  "plugins": [
+    {
+      "name": "duo",
+      "source": "./",
+      "description": "Collaborative pair programming — split coding between human and AI",
+      "version": "0.1.0",
+      "category": "development-workflows",
+      "tags": ["pair-programming", "collaborative", "code-review", "mcp"],
+      "strict": true
+    }
+  ]
+}

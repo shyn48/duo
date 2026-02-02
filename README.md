@@ -13,7 +13,20 @@ Duo splits coding tasks between human and AI so you write the interesting parts,
 
 ## Installation
 
-### Via npm (recommended)
+### Claude Code Plugin (recommended)
+
+```
+/plugin marketplace add shyn48/duo
+/plugin install duo@shyn48-duo
+```
+
+This automatically:
+- Installs the plugin
+- Sets up the MCP server
+- Adds the `/duo` command
+- Loads the collaborative coding skill
+
+### Via npm
 
 ```bash
 npm install -g @duo-dev/mcp-server
