@@ -1,0 +1,53 @@
+{
+  "name": "@duo-dev/mcp-server",
+  "version": "0.1.0",
+  "description": "Duo — Collaborative pair programming MCP server. Split coding tasks between human and AI for better code quality, codebase understanding, and enjoyability.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "duo-mcp": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "SPEC.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "cli": "node dist/cli.js",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "pair-programming",
+    "duo",
+    "collaborative-coding",
+    "ai-coding",
+    "code-review",
+    "model-context-protocol"
+  ],
+  "author": "Shayan <shayanfall79@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shyn48/duo"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.7",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
