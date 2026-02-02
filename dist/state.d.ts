@@ -1,7 +1,7 @@
 /**
  * Duo State Manager — Persistent task and session state
  */
-import type { DuoSession, DuoConfig, Task, TaskAssignee, TaskStatus, SessionPhase, DesignDocument, UserPreferences } from "./types.js";
+import type { DuoSession, DuoConfig, Task, TaskAssignee, TaskStatus, SessionPhase, DesignDocument, UserPreferences, SubagentInfo } from "./types.js";
 import type { DashboardServer } from "./dashboard/index.js";
 export declare class DuoState {
     private session;
@@ -28,6 +28,9 @@ export declare class DuoState {
     getPreferences(): UserPreferences;
     addPreference(taskType: string, assignee: TaskAssignee): Promise<void>;
     formatTaskBoard(): string;
+    addSubagent(info: SubagentInfo): Promise<void>;
+    getSubagents(): SubagentInfo[];
+    getStateDir(): string;
     getSession(): DuoSession;
     clear(): Promise<void>;
 }

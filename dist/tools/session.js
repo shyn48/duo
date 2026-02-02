@@ -6,6 +6,7 @@ import { DuoState } from "../state.js";
 import { setStateInstance, getStateInstanceAutoLoad } from "../resources.js";
 import { DashboardServer } from "../dashboard/index.js";
 import { exec } from "node:child_process";
+import { ensureDocsDir, saveDocument } from "./document.js";
 let dashboardInstance = null;
 function openBrowser(url) {
     const platform = process.platform;
@@ -35,6 +36,8 @@ export function registerSessionTools(server) {
     }, async ({ projectRoot, dashboardPort, openDashboard }) => {
         const state = new DuoState(projectRoot);
         await state.init();
+        // Ensure .duo/docs/ directory exists
+        await ensureDocsDir(state.getStateDir());
         // Only set to design if this is a fresh session (no existing state)
         const session = state.getSession();
         const isExisting = session.taskBoard.tasks.length > 0 || session.phase !== "idle";
@@ -213,6 +216,34 @@ export function registerSessionTools(server) {
             deferredItems,
             createdAt: new Date().toISOString(),
         });
+        // Auto-save design to .duo/docs/
+        const designContent = [
+            `# ${taskDescription}`,
+            "",
+            agreedDesign,
+            "",
+            decisions.length > 0
+                ? `## Decisions\n${decisions.map((d) => `- ${d}`).join("\n")}`
+                : "",
+            deferredItems.length > 0
+                ? `## Deferred\n${deferredItems.map((d) => `- ${d}`).join("\n")}`
+                : "",
+        ]
+            .filter(Boolean)
+            .join("\n");
+        let docNote = "";
+        try {
+            const filename = await saveDocument(state.getStateDir(), {
+                title: taskDescription,
+                content: designContent,
+                phase: state.getPhase(),
+                category: "design",
+            });
+            docNote = `\nDoc: ${filename}`;
+        }
+        catch {
+            // Non-critical — don't fail the design save
+        }
         return {
             content: [
                 {
@@ -223,6 +254,7 @@ export function registerSessionTools(server) {
                         `Task: ${taskDescription}`,
                         `Decisions: ${decisions.length}`,
                         `Deferred: ${deferredItems.length}`,
+                        docNote,
                         "",
                         "Ready to move to planning phase.",
                     ].join("\n"),

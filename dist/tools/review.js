@@ -3,6 +3,7 @@
  */
 import { z } from "zod";
 import { getStateInstanceAutoLoad } from "../resources.js";
+import { saveDocument } from "./document.js";
 export function registerReviewTools(server) {
     // ── Start review for a task ──
     server.tool("duo_review_start", "Begin the review process for a completed task. Sets the task to review status.", {
@@ -83,6 +84,10 @@ export function registerReviewTools(server) {
                         ].join(""),
                     },
                 ],
+                _meta: {
+                    from: "system",
+                    timestamp: new Date().toISOString(),
+                },
             };
         }
         catch (e) {
@@ -130,6 +135,30 @@ export function registerReviewTools(server) {
         const humanTasks = tasks.filter((t) => t.assignee === "human");
         const aiTasks = tasks.filter((t) => t.assignee === "ai");
         await state.setPhase("integrating");
+        // Auto-save integration summary to .duo/docs/
+        const summaryContent = [
+            `# Integration Summary`,
+            "",
+            `Total tasks: ${tasks.length}`,
+            `Human tasks: ${humanTasks.length}`,
+            `AI tasks: ${aiTasks.length}`,
+            "",
+            "## Tasks",
+            ...tasks.map((t) => `- [${t.id}] ${t.description} (${t.assignee}) — ${t.reviewStatus ?? "done"}`),
+        ].join("\n");
+        let docNote = "";
+        try {
+            const filename = await saveDocument(state.getStateDir(), {
+                title: "Integration Summary",
+                content: summaryContent,
+                phase: "integrating",
+                category: "integration",
+            });
+            docNote = `\n📄 Summary saved: ${filename}`;
+        }
+        catch {
+            // Non-critical
+        }
         return {
             content: [
                 {
@@ -140,16 +169,22 @@ export function registerReviewTools(server) {
                         `All ${tasks.length} tasks complete:`,
                         `  🧑 Human: ${humanTasks.length} tasks`,
                         `  🤖 AI: ${aiTasks.length} tasks`,
+                        docNote,
                         "",
                         "Next steps:",
                         "1. Run the test suite",
                         "2. Fix any failures collaboratively",
                         "3. Commit with a descriptive message",
                         "",
-                        "Run tests and report results.",
+                        "Ready to end the Duo session, or do you need to continue working?",
                     ].join("\n"),
                 },
             ],
+            _meta: {
+                from: "system",
+                timestamp: new Date().toISOString(),
+            },
+            nextAction: "prompt_for_end",
         };
     });
 }

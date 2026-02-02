@@ -55,28 +55,29 @@ Swap any tasks? Or good to go?
 
 ### Phase 3: Execute
 
-1. Initialize task state: run `scripts/task-board.sh init` in the project directory
-2. Add all tasks: `scripts/task-board.sh add <id> <assignee> "<description>"`
-3. Spawn subagent(s) for AI-assigned tasks via `sessions_spawn`. See [references/orchestration.md](references/orchestration.md) for:
-   - Sub-agent task prompt template
-   - How to review and integrate sub-agent results
-   - Context management to avoid overflow
-   - Main thread stays free for human interaction
-4. Tell the human to start their tasks in their IDE
-5. As sub-agents complete, review their code incrementally (don't wait for all to finish)
-6. Respond to human signals:
-   - **"done with task N"** → update board, read their changes, move to review
+1. Start session and add tasks using Duo MCP tools:
+   - `duo_session_start` — initialize session and dashboard
+   - `duo_task_add_bulk` — add all planned tasks at once
+2. For each AI-assigned task, use `duo_subagent_spawn` to spawn a sub-agent:
+   - Provide the task ID, description, prompt, and relevant files
+   - The tool builds a structured prompt with design context and project info
+   - Use the returned `subagentPrompt` to spawn via your platform's native mechanism (OpenClaw `sessions_spawn`, Claude Code `Task`, etc.)
+   - See [references/orchestration.md](references/orchestration.md) for orchestration patterns
+3. Tell the human to start their tasks in their IDE
+4. As sub-agents complete, review their code incrementally (don't wait for all to finish)
+5. Respond to human signals:
+   - **"done with task N"** → `duo_task_update` to update status, read their changes, move to review
    - **"stuck on task N"** → help with escalating approach:
      1. Ask what specifically they're stuck on
      2. Give a conceptual hint (not code)
      3. Show pseudocode or a pattern reference
      4. Only if explicitly asked: provide implementation
      5. Ask if they want to keep the task or hand it off
-   - **"swap task N to me/you"** → reassign: `scripts/task-board.sh assign <id> <assignee>`
-   - **"status"** → run `scripts/task-board.sh show`
-7. When subagent completes, review its output, then notify:
+   - **"swap task N to me/you"** → `duo_task_reassign`
+   - **"status"** → `duo_task_board`
+6. When subagent completes, review its output, then notify:
    "🤖 Task N done — I've reviewed the code. Ready for your review when you are."
-8. When all AI tasks are done, integrate results into unified "AI code" before presenting to human
+7. When all AI tasks are done, integrate results into unified "AI code" before presenting to human
 
 **Never rush the human.** They code at their pace. Never take over unless asked.
 **Review sub-agent code before showing to human.** You're the tech lead, not a passthrough.
@@ -105,17 +106,44 @@ Cross-review is critical. This is where code quality and understanding happen.
 1. Ensure all code is committed
 2. Run full test suite, report results
 3. If tests fail → figure out whose code caused it, fix collaboratively
-4. Final commit with descriptive message crediting the collaborative work
+4. Run `duo_integrate` — this auto-saves the integration summary to `.duo/docs/`
+5. The tool returns `nextAction: "prompt_for_end"` — **ask the human** if they want to end the session or continue working
+6. If ending: call `duo_session_end`
 
-## State Management
+## MCP Tools Reference
 
-Task state in `.duo/tasks.json`. Managed via `scripts/task-board.sh`:
-- `init` — create .duo directory and empty board
-- `add <id> <assignee> <description>` — add task (assignee: human|ai)
-- `update <id> <status>` — set status (todo|in_progress|review|done)
-- `assign <id> <assignee>` — reassign task
-- `show` — display current board
-- `clear` — remove .duo directory
+### Session Management
+- `duo_session_start` — Start session, create `.duo/` and `.duo/docs/`, launch dashboard
+- `duo_session_status` — Show current phase, task board, progress
+- `duo_phase_advance` — Move to next phase (design → planning → executing → reviewing → integrating)
+- `duo_design_save` — Save design doc (auto-stores to `.duo/docs/`)
+- `duo_session_end` — End session, stop dashboard
+
+### Task Management
+- `duo_task_add` / `duo_task_add_bulk` — Add tasks to the board
+- `duo_task_update` — Update task status (todo → in_progress → review → done)
+- `duo_task_reassign` — Swap task between human/AI
+- `duo_task_board` — Display current board
+- `duo_help_request` — Log help request with escalation level
+
+### Sub-Agent Orchestration
+- `duo_subagent_spawn` — Spawn a sub-agent for an AI task. Returns a structured `subagentPrompt` that you pass to your platform's native spawning mechanism. Validates dependencies, tracks subagent state.
+
+### Review & Integration
+- `duo_review_start` — Begin code review for a task
+- `duo_review_submit` — Submit review feedback (approve/request changes)
+- `duo_integrate` — Run integration phase, auto-save summary to `.duo/docs/`
+
+### Documentation
+- `duo_document_save` — Save a document to `.duo/docs/` with auto-generated filename
+
+## Message Threading
+
+Tool responses include `_meta: { from, timestamp }` to identify message sources:
+- `"ai"` — Main agent actions
+- `"human"` — Human-initiated actions
+- `"subagent"` — Sub-agent updates
+- `"system"` — System events
 
 ## Anti-Patterns (avoid these)
 

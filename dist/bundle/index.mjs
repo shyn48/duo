@@ -20854,6 +20854,7 @@ var DuoState = class {
       taskBoard: { tasks: [], createdAt: now(), updatedAt: now() },
       design: null,
       preferences: { humanPrefers: [], aiPrefers: [], overrides: {} },
+      subagents: [],
       startedAt: now(),
       updatedAt: now()
     };
@@ -20876,6 +20877,9 @@ var DuoState = class {
     if (existsSync(sessionPath)) {
       const data = await readFile(sessionPath, "utf-8");
       this.session = JSON.parse(data);
+      if (!this.session.subagents) {
+        this.session.subagents = [];
+      }
     }
     const prefsPath = join(this.stateDir, "preferences.json");
     if (existsSync(prefsPath)) {
@@ -21020,6 +21024,21 @@ var DuoState = class {
 \u2500\u2500 Progress: ${done}/${tasks.length} tasks complete \u2500\u2500`;
     return output;
   }
+  // ── Subagent Tracking ──
+  async addSubagent(info) {
+    if (!this.session.subagents) {
+      this.session.subagents = [];
+    }
+    this.session.subagents.push(info);
+    await this.save();
+  }
+  getSubagents() {
+    return this.session.subagents ?? [];
+  }
+  // ── State Directory ──
+  getStateDir() {
+    return this.stateDir;
+  }
   // ── Session Info ──
   getSession() {
     return this.session;
@@ -21077,10 +21096,10 @@ async function getStateInstanceAutoLoad() {
   const projectRoot = process.env.DUO_PROJECT_ROOT;
   if (!projectRoot)
     return null;
-  const { existsSync: existsSync2 } = await import("node:fs");
-  const { join: join3 } = await import("node:path");
-  const sessionPath = join3(projectRoot, ".duo", "session.json");
-  if (!existsSync2(sessionPath))
+  const { existsSync: existsSync3 } = await import("node:fs");
+  const { join: join4 } = await import("node:path");
+  const sessionPath = join4(projectRoot, ".duo", "session.json");
+  if (!existsSync3(sessionPath))
     return null;
   const state = new DuoState(projectRoot);
   await state.init();
@@ -21312,6 +21331,86 @@ var DashboardServer = class {
 
 // dist/tools/session.js
 import { exec } from "node:child_process";
+
+// dist/tools/document.js
+import { mkdir as mkdir2, writeFile as writeFile2 } from "node:fs/promises";
+import { existsSync as existsSync2 } from "node:fs";
+import { join as join3 } from "node:path";
+function slugify(title) {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+}
+async function ensureDocsDir(stateDir) {
+  const docsDir = join3(stateDir, "docs");
+  if (!existsSync2(docsDir)) {
+    await mkdir2(docsDir, { recursive: true });
+  }
+  return docsDir;
+}
+async function saveDocument(stateDir, opts) {
+  const docsDir = await ensureDocsDir(stateDir);
+  const date3 = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const slug = slugify(opts.title);
+  const filename = `${opts.phase}-${date3}-${slug}.md`;
+  const filePath = join3(docsDir, filename);
+  const header = [
+    "---",
+    `title: "${opts.title}"`,
+    `phase: ${opts.phase}`,
+    `date: ${date3}`,
+    opts.category ? `category: ${opts.category}` : null,
+    "---",
+    ""
+  ].filter((line) => line !== null).join("\n");
+  await writeFile2(filePath, header + opts.content);
+  return filename;
+}
+function registerDocumentTools(server) {
+  server.tool("duo_document_save", "Save a document to .duo/docs/ for project documentation. Auto-generates filename with phase and date.", {
+    title: external_exports.string().describe("Document title"),
+    content: external_exports.string().describe("Document content (markdown)"),
+    phase: external_exports.string().describe("Session phase (auto-detected from current phase if omitted)").optional(),
+    category: external_exports.enum(["design", "review", "integration", "reference"]).describe("Document category").optional()
+  }, async ({ title, content, phase, category }) => {
+    const state = await getStateInstanceAutoLoad();
+    if (!state) {
+      return {
+        content: [
+          { type: "text", text: "No active Duo session." }
+        ]
+      };
+    }
+    const effectivePhase = phase ?? state.getPhase();
+    const stateDir = state.getStateDir();
+    try {
+      const filename = await saveDocument(stateDir, {
+        title,
+        content,
+        phase: effectivePhase,
+        category
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `\u{1F4C4} Document saved: ${filename}`
+          }
+        ]
+      };
+    } catch (e) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error saving document: ${e.message}`
+          }
+        ],
+        isError: true
+      };
+    }
+  });
+}
+
+// dist/tools/session.js
 var dashboardInstance = null;
 function openBrowser(url) {
   const platform = process.platform;
@@ -21330,6 +21429,7 @@ function registerSessionTools(server) {
   }, async ({ projectRoot, dashboardPort, openDashboard }) => {
     const state = new DuoState(projectRoot);
     await state.init();
+    await ensureDocsDir(state.getStateDir());
     const session = state.getSession();
     const isExisting = session.taskBoard.tasks.length > 0 || session.phase !== "idle";
     if (!isExisting) {
@@ -21488,6 +21588,28 @@ function registerSessionTools(server) {
       deferredItems,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     });
+    const designContent = [
+      `# ${taskDescription}`,
+      "",
+      agreedDesign,
+      "",
+      decisions.length > 0 ? `## Decisions
+${decisions.map((d) => `- ${d}`).join("\n")}` : "",
+      deferredItems.length > 0 ? `## Deferred
+${deferredItems.map((d) => `- ${d}`).join("\n")}` : ""
+    ].filter(Boolean).join("\n");
+    let docNote = "";
+    try {
+      const filename = await saveDocument(state.getStateDir(), {
+        title: taskDescription,
+        content: designContent,
+        phase: state.getPhase(),
+        category: "design"
+      });
+      docNote = `
+Doc: ${filename}`;
+    } catch {
+    }
     return {
       content: [
         {
@@ -21498,6 +21620,7 @@ function registerSessionTools(server) {
             `Task: ${taskDescription}`,
             `Decisions: ${decisions.length}`,
             `Deferred: ${deferredItems.length}`,
+            docNote,
             "",
             "Ready to move to planning phase."
           ].join("\n")
@@ -21627,7 +21750,11 @@ function registerTaskTools(server) {
             type: "text",
             text: `${statusIcons[status]} Task [${task.id}] \u2192 ${status}`
           }
-        ]
+        ],
+        _meta: {
+          from: "system",
+          timestamp: (/* @__PURE__ */ new Date()).toISOString()
+        }
       };
     } catch (e) {
       return {
@@ -21730,7 +21857,11 @@ Provide actual code. The human explicitly asked for implementation help.`
     return {
       content: [
         { type: "text", text: levelMessages[escalationLevel] }
-      ]
+      ],
+      _meta: {
+        from: "system",
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      }
     };
   });
 }
@@ -21808,7 +21939,11 @@ function registerReviewTools(server) {
 Feedback: ${feedback}` : ""
             ].join("")
           }
-        ]
+        ],
+        _meta: {
+          from: "system",
+          timestamp: (/* @__PURE__ */ new Date()).toISOString()
+        }
       };
     } catch (e) {
       return {
@@ -21852,6 +21987,28 @@ Feedback: ${feedback}` : ""
     const humanTasks = tasks.filter((t) => t.assignee === "human");
     const aiTasks = tasks.filter((t) => t.assignee === "ai");
     await state.setPhase("integrating");
+    const summaryContent = [
+      `# Integration Summary`,
+      "",
+      `Total tasks: ${tasks.length}`,
+      `Human tasks: ${humanTasks.length}`,
+      `AI tasks: ${aiTasks.length}`,
+      "",
+      "## Tasks",
+      ...tasks.map((t) => `- [${t.id}] ${t.description} (${t.assignee}) \u2014 ${t.reviewStatus ?? "done"}`)
+    ].join("\n");
+    let docNote = "";
+    try {
+      const filename = await saveDocument(state.getStateDir(), {
+        title: "Integration Summary",
+        content: summaryContent,
+        phase: "integrating",
+        category: "integration"
+      });
+      docNote = `
+\u{1F4C4} Summary saved: ${filename}`;
+    } catch {
+    }
     return {
       content: [
         {
@@ -21862,16 +22019,138 @@ Feedback: ${feedback}` : ""
             `All ${tasks.length} tasks complete:`,
             `  \u{1F9D1} Human: ${humanTasks.length} tasks`,
             `  \u{1F916} AI: ${aiTasks.length} tasks`,
+            docNote,
             "",
             "Next steps:",
             "1. Run the test suite",
             "2. Fix any failures collaboratively",
             "3. Commit with a descriptive message",
             "",
-            "Run tests and report results."
+            "Ready to end the Duo session, or do you need to continue working?"
           ].join("\n")
         }
-      ]
+      ],
+      _meta: {
+        from: "system",
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      },
+      nextAction: "prompt_for_end"
+    };
+  });
+}
+
+// dist/tools/subagent.js
+function registerSubagentTools(server) {
+  server.tool("duo_subagent_spawn", "Spawn a sub-agent for an AI-assigned task. Returns a structured prompt that the mother agent can use to spawn via whatever mechanism is available (OpenClaw sessions_spawn, Claude Code Task, etc.).", {
+    taskId: external_exports.string().describe("Task ID to assign to the sub-agent"),
+    description: external_exports.string().describe("Brief description of the sub-agent's job"),
+    prompt: external_exports.string().describe("Detailed instructions for the sub-agent"),
+    files: external_exports.array(external_exports.string()).describe("Files the sub-agent should focus on").default([]),
+    dependencies: external_exports.array(external_exports.string()).describe("Task IDs that must complete before this sub-agent starts").default([]),
+    model: external_exports.string().describe("Preferred model for the sub-agent (platform-dependent)").optional(),
+    background: external_exports.boolean().describe("Whether the sub-agent should run in the background").default(true)
+  }, async ({ taskId, description, prompt, files, dependencies, model, background }) => {
+    const state = await getStateInstanceAutoLoad();
+    if (!state) {
+      return {
+        content: [
+          { type: "text", text: "No active Duo session." }
+        ]
+      };
+    }
+    const task = state.getTask(taskId);
+    if (!task) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error: Task ${taskId} not found on the task board.`
+          }
+        ],
+        isError: true
+      };
+    }
+    for (const depId of dependencies) {
+      const dep = state.getTask(depId);
+      if (!dep) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error: Dependency task ${depId} not found.`
+            }
+          ],
+          isError: true
+        };
+      }
+      if (dep.status !== "done") {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error: Dependency task [${depId}] is not done yet (status: ${dep.status}). Wait for it to complete.`
+            }
+          ],
+          isError: true
+        };
+      }
+    }
+    await state.updateTaskStatus(taskId, "in_progress");
+    const design = state.getDesign();
+    const session = state.getSession();
+    const contextParts = [
+      `# Sub-Agent Task: ${description}`,
+      "",
+      "## Project Context",
+      `- Project root: ${session.projectRoot}`,
+      `- Session phase: ${session.phase}`
+    ];
+    if (design) {
+      contextParts.push("", "## Design Summary", `Task: ${design.taskDescription}`, "", design.agreedDesign);
+      if (design.decisions.length > 0) {
+        contextParts.push("", "### Key Decisions", ...design.decisions.map((d) => `- ${d}`));
+      }
+    }
+    if (files.length > 0) {
+      contextParts.push("", "## Focus Files", ...files.map((f) => `- ${f}`));
+    }
+    contextParts.push("", "## Task Instructions", prompt, "", "## Constraints", "- Stay focused on the assigned task", "- Follow the design decisions above", "- Report completion status when done");
+    const subagentPrompt = contextParts.join("\n");
+    const spawnedAt = (/* @__PURE__ */ new Date()).toISOString();
+    await state.addSubagent({
+      taskId,
+      status: "pending",
+      spawnedAt,
+      prompt: subagentPrompt
+    });
+    const result = {
+      taskId,
+      description,
+      status: "spawned",
+      background,
+      model: model ?? "default",
+      files,
+      dependencies,
+      subagentPrompt,
+      message: `Sub-agent spawned for task [${taskId}]: ${description}`
+    };
+    return {
+      content: [
+        {
+          type: "text",
+          text: [
+            `\u{1F916} Sub-agent ready for task [${taskId}]: ${description}`,
+            "",
+            background ? "Mode: Background" : "Mode: Foreground",
+            model ? `Model: ${model}` : "",
+            files.length > 0 ? `Files: ${files.join(", ")}` : "",
+            dependencies.length > 0 ? `Dependencies: ${dependencies.join(", ")} (all complete)` : "",
+            "",
+            "Use the subagentPrompt from the structured response to spawn the sub-agent via your platform's mechanism."
+          ].filter(Boolean).join("\n")
+        }
+      ],
+      structuredContent: result
     };
   });
 }
@@ -21881,6 +22160,8 @@ function registerTools(server) {
   registerSessionTools(server);
   registerTaskTools(server);
   registerReviewTools(server);
+  registerSubagentTools(server);
+  registerDocumentTools(server);
 }
 
 // dist/index.js

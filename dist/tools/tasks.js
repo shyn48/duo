@@ -98,6 +98,10 @@ export function registerTaskTools(server) {
                         text: `${statusIcons[status]} Task [${task.id}] → ${status}`,
                     },
                 ],
+                _meta: {
+                    from: "system",
+                    timestamp: new Date().toISOString(),
+                },
             };
         }
         catch (e) {
@@ -202,6 +206,10 @@ export function registerTaskTools(server) {
             content: [
                 { type: "text", text: levelMessages[escalationLevel] },
             ],
+            _meta: {
+                from: "system",
+                timestamp: new Date().toISOString(),
+            },
         };
     });
 }

@@ -52,6 +52,7 @@ export interface DuoSession {
   taskBoard: TaskBoard;
   design: DesignDocument | null;
   preferences: UserPreferences;
+  subagents: SubagentInfo[];
   startedAt: string;
   updatedAt: string;
 }
@@ -79,6 +80,26 @@ export interface ClassificationResult {
     enjoyment: number;     // 0-1: is this enjoyable to code?
     efficiency: number;    // 0-1: would AI be significantly faster?
   };
+}
+
+// ── Message Threading ──
+
+export type MessageSource = "human" | "ai" | "subagent" | "system";
+
+export interface MessageMeta {
+  from: MessageSource;
+  timestamp: string;
+}
+
+// ── Subagent Tracking ──
+
+export interface SubagentInfo {
+  taskId: string;
+  agentId?: string;
+  status: "pending" | "running" | "completed" | "failed";
+  spawnedAt: string;
+  completedAt?: string;
+  prompt: string;
 }
 
 // ── Events ──

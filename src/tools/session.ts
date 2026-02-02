@@ -9,6 +9,7 @@ import { setStateInstance, getStateInstanceAutoLoad } from "../resources.js";
 import type { SessionPhase } from "../types.js";
 import { DashboardServer } from "../dashboard/index.js";
 import { exec } from "node:child_process";
+import { ensureDocsDir, saveDocument } from "./document.js";
 
 let dashboardInstance: DashboardServer | null = null;
 
@@ -47,6 +48,9 @@ export function registerSessionTools(server: McpServer) {
     async ({ projectRoot, dashboardPort, openDashboard }) => {
       const state = new DuoState(projectRoot);
       await state.init();
+
+      // Ensure .duo/docs/ directory exists
+      await ensureDocsDir(state.getStateDir());
 
       // Only set to design if this is a fresh session (no existing state)
       const session = state.getSession();
@@ -260,6 +264,35 @@ export function registerSessionTools(server: McpServer) {
         createdAt: new Date().toISOString(),
       });
 
+      // Auto-save design to .duo/docs/
+      const designContent = [
+        `# ${taskDescription}`,
+        "",
+        agreedDesign,
+        "",
+        decisions.length > 0
+          ? `## Decisions\n${decisions.map((d) => `- ${d}`).join("\n")}`
+          : "",
+        deferredItems.length > 0
+          ? `## Deferred\n${deferredItems.map((d) => `- ${d}`).join("\n")}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      let docNote = "";
+      try {
+        const filename = await saveDocument(state.getStateDir(), {
+          title: taskDescription,
+          content: designContent,
+          phase: state.getPhase(),
+          category: "design",
+        });
+        docNote = `\nDoc: ${filename}`;
+      } catch {
+        // Non-critical — don't fail the design save
+      }
+
       return {
         content: [
           {
@@ -270,6 +303,7 @@ export function registerSessionTools(server: McpServer) {
               `Task: ${taskDescription}`,
               `Decisions: ${decisions.length}`,
               `Deferred: ${deferredItems.length}`,
+              docNote,
               "",
               "Ready to move to planning phase.",
             ].join("\n"),

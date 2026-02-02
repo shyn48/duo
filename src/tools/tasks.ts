@@ -134,6 +134,10 @@ export function registerTaskTools(server: McpServer) {
               text: `${statusIcons[status]} Task [${task.id}] → ${status}`,
             },
           ],
+          _meta: {
+            from: "system" as const,
+            timestamp: new Date().toISOString(),
+          },
         };
       } catch (e) {
         return {
@@ -263,6 +267,10 @@ export function registerTaskTools(server: McpServer) {
         content: [
           { type: "text" as const, text: levelMessages[escalationLevel] },
         ],
+        _meta: {
+          from: "system" as const,
+          timestamp: new Date().toISOString(),
+        },
       };
     },
   );
