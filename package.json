@@ -14,7 +14,7 @@
     "SPEC.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp src/dashboard/index.html dist/dashboard/",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
     "cli": "node dist/cli.js",

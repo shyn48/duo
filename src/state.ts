@@ -16,12 +16,15 @@ import type {
   DesignDocument,
   UserPreferences,
   DEFAULT_CONFIG,
+  DuoEvent,
 } from "./types.js";
+import type { DashboardServer } from "./dashboard/index.js";
 
 export class DuoState {
   private session: DuoSession;
   private config: DuoConfig;
   private stateDir: string;
+  private dashboard: DashboardServer | null = null;
 
   constructor(projectRoot: string, config?: Partial<DuoConfig>) {
     const defaults: DuoConfig = {
@@ -50,6 +53,18 @@ export class DuoState {
       startedAt: now(),
       updatedAt: now(),
     };
+  }
+
+  // ── Dashboard Integration ──
+
+  setDashboard(dashboard: DashboardServer): void {
+    this.dashboard = dashboard;
+  }
+
+  private emitEvent(event: DuoEvent): void {
+    if (this.dashboard) {
+      this.dashboard.emitEvent(event);
+    }
   }
 
   // ── Initialization ──
@@ -108,6 +123,7 @@ export class DuoState {
 
   async setPhase(phase: SessionPhase): Promise<void> {
     this.session.phase = phase;
+    this.emitEvent({ type: "phase_changed", phase });
     await this.save();
   }
 
@@ -150,6 +166,7 @@ export class DuoState {
     };
     this.session.taskBoard.tasks.push(task);
     this.session.taskBoard.updatedAt = now();
+    this.emitEvent({ type: "task_added", task });
     await this.save();
     return task;
   }
@@ -157,9 +174,11 @@ export class DuoState {
   async updateTaskStatus(id: string, status: TaskStatus): Promise<Task> {
     const task = this.getTask(id);
     if (!task) throw new Error(`Task ${id} not found`);
+    const oldStatus = task.status;
     task.status = status;
     task.updatedAt = now();
     this.session.taskBoard.updatedAt = now();
+    this.emitEvent({ type: "task_updated", taskId: id, changes: { status } });
     await this.save();
     return task;
   }
@@ -167,9 +186,11 @@ export class DuoState {
   async reassignTask(id: string, assignee: TaskAssignee): Promise<Task> {
     const task = this.getTask(id);
     if (!task) throw new Error(`Task ${id} not found`);
+    const from = task.assignee;
     task.assignee = assignee;
     task.updatedAt = now();
     this.session.taskBoard.updatedAt = now();
+    this.emitEvent({ type: "task_reassigned", taskId: id, from, to: assignee });
     await this.save();
     return task;
   }
@@ -184,6 +205,8 @@ export class DuoState {
     task.reviewStatus = status;
     if (notes) task.reviewNotes = notes;
     task.updatedAt = now();
+    const approved = status === "approved";
+    this.emitEvent({ type: "review_completed", taskId: id, approved });
     await this.save();
     return task;
   }

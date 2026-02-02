@@ -7,14 +7,44 @@ import { z } from "zod";
 import { DuoState } from "../state.js";
 import { setStateInstance, getStateInstanceAutoLoad } from "../resources.js";
 import type { SessionPhase } from "../types.js";
+import { DashboardServer } from "../dashboard/index.js";
+import { exec } from "node:child_process";
+
+let dashboardInstance: DashboardServer | null = null;
+
+function openBrowser(url: string): void {
+  const platform = process.platform;
+  const command =
+    platform === "darwin"
+      ? `open ${url}`
+      : platform === "win32"
+        ? `start ${url}`
+        : `xdg-open ${url}`;
+
+  exec(command, (err) => {
+    if (err) {
+      console.error(`Failed to open browser: ${err.message}`);
+    }
+  });
+}
 
 export function registerSessionTools(server: McpServer) {
   // ── Start a Duo session ──
   server.tool(
     "duo_session_start",
     "Start a new Duo collaborative coding session. Call this at the beginning of a task when using the Duo workflow.",
-    { projectRoot: z.string().describe("Absolute path to the project root directory") },
-    async ({ projectRoot }) => {
+    {
+      projectRoot: z.string().describe("Absolute path to the project root directory"),
+      dashboardPort: z
+        .number()
+        .default(3456)
+        .describe("Port for the dashboard server (default: 3456)"),
+      openDashboard: z
+        .boolean()
+        .default(true)
+        .describe("Automatically open dashboard in browser"),
+    },
+    async ({ projectRoot, dashboardPort, openDashboard }) => {
       const state = new DuoState(projectRoot);
       await state.init();
 
@@ -26,34 +56,85 @@ export function registerSessionTools(server: McpServer) {
       }
       setStateInstance(state);
 
-      const phase = state.getPhase();
-      const tasks = state.getTasks();
-      const msg = isExisting
-        ? [
-            "🔄 Duo session resumed!",
-            "",
-            `Project: ${projectRoot}`,
-            `Phase: ${phase}`,
-            `Tasks: ${tasks.length} (${tasks.filter(t => t.status === "done").length} done)`,
-          ]
-        : [
-            "🎯 Duo session started!",
-            "",
-            `Project: ${projectRoot}`,
-            "Phase: Design",
-            "",
-            "Let's begin the design discussion.",
-            "Describe the task, and tell me if you have a design in mind.",
-          ];
+      // Start dashboard
+      try {
+        dashboardInstance = new DashboardServer(state, dashboardPort);
+        state.setDashboard(dashboardInstance);
+        const url = await dashboardInstance.start();
+        
+        if (openDashboard) {
+          openBrowser(url);
+        }
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: msg.join("\n"),
-          },
-        ],
-      };
+        const phase = state.getPhase();
+        const tasks = state.getTasks();
+        const msg = isExisting
+          ? [
+              "🔄 Duo session resumed!",
+              "",
+              `Project: ${projectRoot}`,
+              `Phase: ${phase}`,
+              `Tasks: ${tasks.length} (${tasks.filter(t => t.status === "done").length} done)`,
+              "",
+              `📊 Dashboard: ${url}`,
+            ]
+          : [
+              "🎯 Duo session started!",
+              "",
+              `Project: ${projectRoot}`,
+              "Phase: Design",
+              "",
+              `📊 Dashboard: ${url}`,
+              "",
+              "Let's begin the design discussion.",
+              "Describe the task, and tell me if you have a design in mind.",
+            ];
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: msg.join("\n"),
+            },
+          ],
+        };
+      } catch (err: any) {
+        console.error(`Dashboard failed to start: ${err.message}`);
+        
+        // Continue without dashboard
+        const phase = state.getPhase();
+        const tasks = state.getTasks();
+        const msg = isExisting
+          ? [
+              "🔄 Duo session resumed!",
+              "",
+              `Project: ${projectRoot}`,
+              `Phase: ${phase}`,
+              `Tasks: ${tasks.length} (${tasks.filter(t => t.status === "done").length} done)`,
+              "",
+              "⚠️ Dashboard failed to start (continuing without it)",
+            ]
+          : [
+              "🎯 Duo session started!",
+              "",
+              `Project: ${projectRoot}`,
+              "Phase: Design",
+              "",
+              "⚠️ Dashboard failed to start (continuing without it)",
+              "",
+              "Let's begin the design discussion.",
+              "Describe the task, and tell me if you have a design in mind.",
+            ];
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: msg.join("\n"),
+            },
+          ],
+        };
+      }
     },
   );
 
@@ -78,6 +159,11 @@ export function registerSessionTools(server: McpServer) {
       const session = state.getSession();
       const board = state.formatTaskBoard();
 
+      const dashboardUrl = dashboardInstance?.getUrl();
+      const dashboardStatus = dashboardUrl
+        ? `\n📊 Dashboard: ${dashboardUrl}`
+        : "";
+
       return {
         content: [
           {
@@ -86,6 +172,7 @@ export function registerSessionTools(server: McpServer) {
               `📊 Duo Session Status`,
               `Phase: ${session.phase}`,
               `Started: ${session.startedAt}`,
+              dashboardStatus,
               "",
               board,
             ].join("\n"),
@@ -214,6 +301,12 @@ export function registerSessionTools(server: McpServer) {
 
       const tasks = state.getTasks();
       const done = tasks.filter((t) => t.status === "done").length;
+
+      // Stop dashboard
+      if (dashboardInstance) {
+        await dashboardInstance.stop();
+        dashboardInstance = null;
+      }
 
       if (!keepState) {
         await state.clear();
