@@ -5,6 +5,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getStateInstanceAutoLoad } from "../resources.js";
+import { saveDocument } from "./document.js";
 
 export function registerReviewTools(server: McpServer) {
   // ── Start review for a task ──
@@ -101,6 +102,10 @@ export function registerReviewTools(server: McpServer) {
               ].join(""),
             },
           ],
+          _meta: {
+            from: "system" as const,
+            timestamp: new Date().toISOString(),
+          },
         };
       } catch (e) {
         return {
@@ -159,6 +164,34 @@ export function registerReviewTools(server: McpServer) {
 
       await state.setPhase("integrating");
 
+      // Auto-save integration summary to .duo/docs/
+      const summaryContent = [
+        `# Integration Summary`,
+        "",
+        `Total tasks: ${tasks.length}`,
+        `Human tasks: ${humanTasks.length}`,
+        `AI tasks: ${aiTasks.length}`,
+        "",
+        "## Tasks",
+        ...tasks.map(
+          (t) =>
+            `- [${t.id}] ${t.description} (${t.assignee}) — ${t.reviewStatus ?? "done"}`,
+        ),
+      ].join("\n");
+
+      let docNote = "";
+      try {
+        const filename = await saveDocument(state.getStateDir(), {
+          title: "Integration Summary",
+          content: summaryContent,
+          phase: "integrating",
+          category: "integration",
+        });
+        docNote = `\n📄 Summary saved: ${filename}`;
+      } catch {
+        // Non-critical
+      }
+
       return {
         content: [
           {
@@ -169,16 +202,22 @@ export function registerReviewTools(server: McpServer) {
               `All ${tasks.length} tasks complete:`,
               `  🧑 Human: ${humanTasks.length} tasks`,
               `  🤖 AI: ${aiTasks.length} tasks`,
+              docNote,
               "",
               "Next steps:",
               "1. Run the test suite",
               "2. Fix any failures collaboratively",
               "3. Commit with a descriptive message",
               "",
-              "Run tests and report results.",
+              "Ready to end the Duo session, or do you need to continue working?",
             ].join("\n"),
           },
         ],
+        _meta: {
+          from: "system" as const,
+          timestamp: new Date().toISOString(),
+        },
+        nextAction: "prompt_for_end",
       };
     },
   );
