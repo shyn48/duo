@@ -137,6 +137,11 @@ Cross-review is critical. This is where code quality and understanding happen.
 ### Documentation
 - `duo_document_save` — Save a document to `.duo/docs/` with auto-generated filename
 
+### Session Recovery & Memory
+- `duo_recover_session` — Recover from context loss. Auto-detects the latest checkpoint from `.duo/memory/`, restores phase, tasks, design, and subagent state. Call this when you detect context loss or the human says "recover".
+- Checkpoints are saved automatically on every phase transition. The agent can also call `state.checkpoint(context)` manually before risky operations.
+- Chat history is logged automatically to `.duo/chat/session-{startedAt}.jsonl` — all task updates, phase changes, reviews, and subagent events are recorded.
+
 ## Message Threading
 
 Tool responses include `_meta: { from, timestamp }` to identify message sources:
