@@ -31,6 +31,7 @@ export class DuoState {
             taskBoard: { tasks: [], createdAt: now(), updatedAt: now() },
             design: null,
             preferences: { humanPrefers: [], aiPrefers: [], overrides: {} },
+            subagents: [],
             startedAt: now(),
             updatedAt: now(),
         };
@@ -54,6 +55,10 @@ export class DuoState {
         if (existsSync(sessionPath)) {
             const data = await readFile(sessionPath, "utf-8");
             this.session = JSON.parse(data);
+            // Ensure subagents array exists (backward compat with v0.1.0 state)
+            if (!this.session.subagents) {
+                this.session.subagents = [];
+            }
         }
         // Load preferences if they exist
         const prefsPath = join(this.stateDir, "preferences.json");
@@ -195,6 +200,21 @@ export class DuoState {
         const done = tasks.filter((t) => t.status === "done").length;
         output += `\n── Progress: ${done}/${tasks.length} tasks complete ──`;
         return output;
+    }
+    // ── Subagent Tracking ──
+    async addSubagent(info) {
+        if (!this.session.subagents) {
+            this.session.subagents = [];
+        }
+        this.session.subagents.push(info);
+        await this.save();
+    }
+    getSubagents() {
+        return this.session.subagents ?? [];
+    }
+    // ── State Directory ──
+    getStateDir() {
+        return this.stateDir;
     }
     // ── Session Info ──
     getSession() {
