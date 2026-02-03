@@ -9,6 +9,7 @@ import { registerDocumentTools } from "./document.js";
 import { registerRecoverTools } from "./recover.js";
 import { registerSearchTools } from "./search.js";
 import { registerMemoryTools } from "./memory.js";
+import { registerDiscoveryTools } from "./discovery.js";
 export function registerTools(server) {
     registerSessionTools(server);
     registerTaskTools(server);
@@ -18,5 +19,6 @@ export function registerTools(server) {
     registerRecoverTools(server);
     registerSearchTools(server);
     registerMemoryTools(server);
+    registerDiscoveryTools(server);
 }
 //# sourceMappingURL=index.js.map

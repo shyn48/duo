@@ -21224,10 +21224,10 @@ async function getStateInstanceAutoLoad() {
   const projectRoot = process.env.DUO_PROJECT_ROOT;
   if (!projectRoot)
     return null;
-  const { existsSync: existsSync8 } = await import("node:fs");
-  const { join: join9 } = await import("node:path");
-  const sessionPath = join9(projectRoot, ".duo", "session.json");
-  if (!existsSync8(sessionPath))
+  const { existsSync: existsSync9 } = await import("node:fs");
+  const { join: join10 } = await import("node:path");
+  const sessionPath = join10(projectRoot, ".duo", "session.json");
+  if (!existsSync9(sessionPath))
     return null;
   const state = new DuoState(projectRoot);
   await state.init();
@@ -21841,6 +21841,163 @@ function insertInSection(content, sectionHeader, newContent) {
   return lines.join("\n");
 }
 
+// dist/tools/discovery.js
+import { readFile as readFile7, writeFile as writeFile6 } from "node:fs/promises";
+import { existsSync as existsSync7 } from "node:fs";
+import { join as join8 } from "node:path";
+var DISCOVERIES_FILE = "discoveries.json";
+async function readDiscoveries(stateDir) {
+  const path = join8(stateDir, DISCOVERIES_FILE);
+  if (!existsSync7(path)) {
+    return [];
+  }
+  try {
+    const data = await readFile7(path, "utf-8");
+    const store = JSON.parse(data);
+    return store.discoveries || [];
+  } catch {
+    return [];
+  }
+}
+async function saveDiscovery(stateDir, discovery, sessionStartedAt) {
+  const path = join8(stateDir, DISCOVERIES_FILE);
+  let store;
+  if (existsSync7(path)) {
+    try {
+      const data = await readFile7(path, "utf-8");
+      store = JSON.parse(data);
+      if (store.sessionStartedAt !== sessionStartedAt) {
+        store = { discoveries: [], sessionStartedAt };
+      }
+    } catch {
+      store = { discoveries: [], sessionStartedAt };
+    }
+  } else {
+    store = { discoveries: [], sessionStartedAt };
+  }
+  store.discoveries.push(discovery);
+  await writeFile6(path, JSON.stringify(store, null, 2));
+}
+async function clearDiscoveries(stateDir) {
+  const path = join8(stateDir, DISCOVERIES_FILE);
+  if (existsSync7(path)) {
+    await writeFile6(path, JSON.stringify({ discoveries: [], sessionStartedAt: "" }, null, 2));
+  }
+}
+function formatDiscoveries(discoveries) {
+  if (discoveries.length === 0) {
+    return "No discoveries collected this session.";
+  }
+  const icons = {
+    pattern: "\u{1F504}",
+    gotcha: "\u26A0\uFE0F",
+    architecture: "\u{1F3D7}\uFE0F",
+    file: "\u{1F4C4}",
+    convention: "\u{1F4CF}"
+  };
+  const lines = discoveries.map((d) => {
+    const icon = icons[d.type] || "\u{1F4DD}";
+    const fileNote = d.filePath ? ` (${d.filePath})` : "";
+    return `${icon} [${d.type}] ${d.content}${fileNote}`;
+  });
+  return lines.join("\n");
+}
+function discoveriesToCodebaseUpdates(discoveries) {
+  const updates = {};
+  for (const d of discoveries) {
+    switch (d.type) {
+      case "pattern":
+        updates.patterns = updates.patterns || [];
+        updates.patterns.push(d.content);
+        break;
+      case "gotcha":
+        updates.gotchas = updates.gotchas || [];
+        updates.gotchas.push(d.content);
+        break;
+      case "architecture":
+        updates.architecture = updates.architecture ? `${updates.architecture}
+${d.content}` : d.content;
+        break;
+      case "file":
+        if (d.filePath) {
+          updates.files = updates.files || [];
+          updates.files.push({ path: d.filePath, purpose: d.content });
+        }
+        break;
+      case "convention":
+        updates.conventions = updates.conventions || [];
+        updates.conventions.push(d.content);
+        break;
+    }
+  }
+  return updates;
+}
+function registerDiscoveryTools(server) {
+  server.tool("duo_note_discovery", "Note a codebase discovery during the session. Call this IMMEDIATELY when you discover patterns, gotchas, important files, or conventions. These are collected and suggested for CODEBASE.md at session end.", {
+    type: external_exports.enum(["pattern", "gotcha", "architecture", "file", "convention"]).describe("Type of discovery: pattern (recurring code pattern), gotcha (warning/pitfall), architecture (high-level design), file (important file), convention (coding convention)"),
+    content: external_exports.string().describe("Description of what you discovered"),
+    filePath: external_exports.string().optional().describe("Relevant file path (required for 'file' type, optional for others)")
+  }, async ({ type, content, filePath }) => {
+    const state = await getStateInstanceAutoLoad();
+    if (!state) {
+      return {
+        content: [
+          { type: "text", text: "No active Duo session. Start one with duo_session_start." }
+        ]
+      };
+    }
+    const discovery = {
+      type,
+      content,
+      filePath,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    const session = state.getSession();
+    await saveDiscovery(state.getStateDir(), discovery, session.startedAt);
+    await state.logChat("system", "event", `Discovery noted: [${type}] ${content}`);
+    const icons = {
+      pattern: "\u{1F504}",
+      gotcha: "\u26A0\uFE0F",
+      architecture: "\u{1F3D7}\uFE0F",
+      file: "\u{1F4C4}",
+      convention: "\u{1F4CF}"
+    };
+    return {
+      content: [
+        {
+          type: "text",
+          text: `${icons[type]} Discovery noted: [${type}] ${content}
+
+This will be suggested for CODEBASE.md at session end.`
+        }
+      ]
+    };
+  });
+  server.tool("duo_list_discoveries", "List all discoveries collected this session.", {}, async () => {
+    const state = await getStateInstanceAutoLoad();
+    if (!state) {
+      return {
+        content: [
+          { type: "text", text: "No active Duo session." }
+        ]
+      };
+    }
+    const discoveries = await readDiscoveries(state.getStateDir());
+    return {
+      content: [
+        {
+          type: "text",
+          text: [
+            `\u{1F4DD} Discoveries this session: ${discoveries.length}`,
+            "",
+            formatDiscoveries(discoveries)
+          ].join("\n")
+        }
+      ]
+    };
+  });
+}
+
 // dist/tools/session.js
 var dashboardInstance = null;
 function openBrowser(url) {
@@ -22050,7 +22207,7 @@ Doc: ${filename}`;
       ]
     };
   });
-  server.tool("duo_session_end", "End the current Duo session. Auto-archives for future recall and prompts for codebase knowledge updates.", {
+  server.tool("duo_session_end", "End the current Duo session. Shows collected discoveries and prompts for CODEBASE.md updates.", {
     summary: external_exports.string().optional().describe("Summary of what was accomplished (auto-generated if not provided)"),
     keyLearnings: external_exports.array(external_exports.string()).optional().describe("Key insights or lessons from this session"),
     tags: external_exports.array(external_exports.string()).optional().describe("Tags for categorizing this session (e.g., 'auth', 'api', 'refactor')"),
@@ -22063,9 +22220,10 @@ Doc: ${filename}`;
       })).optional().describe("Important files and their purposes"),
       gotchas: external_exports.array(external_exports.string()).optional().describe("Gotchas or warnings discovered"),
       conventions: external_exports.array(external_exports.string()).optional().describe("Coding conventions observed")
-    }).optional().describe("Updates to add to CODEBASE.md for future sessions"),
+    }).optional().describe("Updates to add to CODEBASE.md (or use includeDiscoveries to auto-include)"),
+    includeDiscoveries: external_exports.boolean().optional().default(true).describe("Automatically include collected discoveries in CODEBASE.md"),
     keepState: external_exports.boolean().describe("Keep .duo state files for reference").default(true)
-  }, async ({ summary, keyLearnings, tags, codebaseUpdates, keepState }) => {
+  }, async ({ summary, keyLearnings, tags, codebaseUpdates, includeDiscoveries, keepState }) => {
     const state = await getStateInstanceAutoLoad();
     if (!state) {
       return {
@@ -22077,6 +22235,8 @@ Doc: ${filename}`;
     const session = state.getSession();
     const tasks = state.getTasks();
     const done = tasks.filter((t) => t.status === "done").length;
+    const discoveries = await readDiscoveries(state.getStateDir());
+    const hasDiscoveries = discoveries.length > 0;
     const autoSummary = summary || `${session.design?.taskDescription || "Duo session"} \u2014 ${done}/${tasks.length} tasks completed`;
     let archivePath = null;
     try {
@@ -22085,15 +22245,35 @@ Doc: ${filename}`;
       console.error("Failed to archive session:", e);
     }
     let codebaseUpdated = false;
-    if (codebaseUpdates && Object.keys(codebaseUpdates).length > 0) {
+    let finalUpdates = codebaseUpdates || {};
+    if (includeDiscoveries && hasDiscoveries) {
+      const discoveryUpdates = discoveriesToCodebaseUpdates(discoveries);
+      finalUpdates = {
+        architecture: finalUpdates.architecture || discoveryUpdates.architecture,
+        patterns: [...discoveryUpdates.patterns || [], ...finalUpdates.patterns || []],
+        files: [...discoveryUpdates.files || [], ...finalUpdates.files || []],
+        gotchas: [...discoveryUpdates.gotchas || [], ...finalUpdates.gotchas || []],
+        conventions: [...discoveryUpdates.conventions || [], ...finalUpdates.conventions || []]
+      };
+      if (finalUpdates.patterns?.length === 0)
+        delete finalUpdates.patterns;
+      if (finalUpdates.files?.length === 0)
+        delete finalUpdates.files;
+      if (finalUpdates.gotchas?.length === 0)
+        delete finalUpdates.gotchas;
+      if (finalUpdates.conventions?.length === 0)
+        delete finalUpdates.conventions;
+    }
+    if (Object.keys(finalUpdates).length > 0) {
       try {
-        await appendCodebaseKnowledge(state.getStateDir(), codebaseUpdates);
+        await appendCodebaseKnowledge(state.getStateDir(), finalUpdates);
         codebaseUpdated = true;
       } catch (e) {
         console.error("Failed to update codebase knowledge:", e);
       }
     }
-    await state.logChat("system", "event", `Session ended \u2014 ${done}/${tasks.length} tasks done`);
+    await clearDiscoveries(state.getStateDir());
+    await state.logChat("system", "event", `Session ended \u2014 ${done}/${tasks.length} tasks done, ${discoveries.length} discoveries`);
     if (dashboardInstance) {
       await dashboardInstance.stop();
       dashboardInstance = null;
@@ -22102,18 +22282,25 @@ Doc: ${filename}`;
       await state.clear();
     }
     setStateInstance(null);
+    const responseLines = [
+      "\u{1F44B} Duo session ended!",
+      "",
+      `Tasks completed: ${done}/${tasks.length}`
+    ];
+    if (hasDiscoveries) {
+      responseLines.push("");
+      responseLines.push(`\u{1F4DD} Discoveries collected: ${discoveries.length}`);
+      responseLines.push(formatDiscoveries(discoveries));
+    }
+    responseLines.push("");
+    responseLines.push(archivePath ? `\u{1F4C1} Archived: ${archivePath}` : "\u26A0\uFE0F Archive failed");
+    responseLines.push(codebaseUpdated ? `\u{1F4DA} CODEBASE.md updated with ${hasDiscoveries ? "discoveries + " : ""}knowledge` : hasDiscoveries ? "\u26A0\uFE0F Discoveries not saved (pass includeDiscoveries: true)" : "\u{1F4A1} Tip: Use duo_note_discovery during sessions to collect insights");
+    responseLines.push(keepState ? "State files preserved in .duo/" : "State files cleaned up.");
     return {
       content: [
         {
           type: "text",
-          text: [
-            "\u{1F44B} Duo session ended!",
-            "",
-            `Tasks completed: ${done}/${tasks.length}`,
-            archivePath ? `\u{1F4C1} Archived: ${archivePath}` : "\u26A0\uFE0F Archive failed",
-            codebaseUpdated ? "\u{1F4DA} CODEBASE.md updated with new knowledge" : "\u{1F4A1} Tip: Pass codebaseUpdates to persist patterns/gotchas for future sessions",
-            keepState ? "State files preserved in .duo/" : "State files cleaned up."
-          ].join("\n")
+          text: responseLines.join("\n")
         }
       ]
     };
@@ -22710,8 +22897,8 @@ function registerRecoverTools(server) {
 // dist/tools/search.js
 import { execFile as execFile2 } from "node:child_process";
 import { promisify as promisify2 } from "node:util";
-import { existsSync as existsSync7 } from "node:fs";
-import { join as join8 } from "node:path";
+import { existsSync as existsSync8 } from "node:fs";
+import { join as join9 } from "node:path";
 var execFileAsync2 = promisify2(execFile2);
 var DuoSearchSchema = {
   query: external_exports.string().describe("Search query for session context"),
@@ -22753,9 +22940,9 @@ async function executeQmdSearch(query, mode, limit, collection) {
   }
 }
 async function ensureCollection(stateDir, sessionId) {
-  const chatDir = join8(stateDir, "chat");
-  const docsDir = join8(stateDir, "docs");
-  if (!existsSync7(chatDir) && !existsSync7(docsDir)) {
+  const chatDir = join9(stateDir, "chat");
+  const docsDir = join9(stateDir, "docs");
+  if (!existsSync8(chatDir) && !existsSync8(docsDir)) {
     return;
   }
   try {
@@ -22763,7 +22950,7 @@ async function ensureCollection(stateDir, sessionId) {
     const collections = JSON.parse(stdout || "[]");
     const collectionName = `duo-session`;
     const exists = collections.some((c) => c.name === collectionName);
-    if (!exists && existsSync7(chatDir)) {
+    if (!exists && existsSync8(chatDir)) {
       await execFileAsync2("qmd", [
         "collection",
         "add",
@@ -22775,7 +22962,7 @@ async function ensureCollection(stateDir, sessionId) {
       ]);
       await execFileAsync2("qmd", ["update"]);
     }
-    if (existsSync7(docsDir)) {
+    if (existsSync8(docsDir)) {
       const docsCollectionName = `duo-docs`;
       const docsExists = collections.some((c) => c.name === docsCollectionName);
       if (!docsExists) {
@@ -22851,6 +23038,7 @@ function registerTools(server) {
   registerRecoverTools(server);
   registerSearchTools(server);
   registerMemoryTools(server);
+  registerDiscoveryTools(server);
 }
 
 // dist/index.js

@@ -69,51 +69,81 @@ Additionally, query past sessions for feature-specific context:
 duo_memory_recall query="[feature area]" limit=5
 ```
 
-### During Session
 
-1. **Search before asking:** When uncertain about a pattern or decision:
-   ```
-   duo_search query="[topic]" mode="keyword"
-   ```
-2. **Note things to persist:** When you discover something important:
-   - Architecture patterns → Remember for `codebaseUpdates` at session end
-   - Gotchas/warnings → Remember for `codebaseUpdates.gotchas`
-   - Important files → Remember for `codebaseUpdates.files`
+### During Session (🔒 Use duo_note_discovery!)
 
-### At Session End (Persist for Future You)
-
-**This is where you contribute back.** The `codebaseUpdates` parameter persists knowledge to CODEBASE.md:
+**When you discover something important, note it IMMEDIATELY:**
 
 ```typescript
-duo_session_end(
-  summary: "Implemented OAuth flow with PKCE",
-  keyLearnings: [
-    "Google OAuth requires state parameter validation",
-    "Token refresh uses sliding window pattern"
-  ],
-  tags: ["auth", "oauth", "google"],
-  codebaseUpdates: {
-    architecture: "OAuth uses PKCE flow for mobile clients",
-    patterns: [
-      "Token refresh with sliding window",
-      "State validation via Redis"
-    ],
-    files: [
-      { path: "core-api/internal/service/google.go", purpose: "Google OAuth service" },
-      { path: "core-api/internal/handler/auth.go", purpose: "Auth endpoints" }
-    ],
-    gotchas: [
-      "go-redis must be v9.7.0, not v9.15.0",
-      "2FA encryption key must be exactly 32 bytes"
-    ],
-    conventions: [
-      "All OAuth providers implement OAuthProvider interface"
-    ]
-  }
-)
+// Discovered a gotcha? Note it now!
+duo_note_discovery({
+  type: "gotcha",
+  content: "go-redis v9.15.0 doesn't exist, must use v9.7.0"
+})
+
+// Found an important file? Note it!
+duo_note_discovery({
+  type: "file",
+  content: "OAuth service implementation",
+  filePath: "core-api/internal/service/google.go"
+})
+
+// Noticed a pattern? Note it!
+duo_note_discovery({
+  type: "pattern",
+  content: "Token refresh uses sliding window pattern"
+})
 ```
 
-**Result:** Future sessions start with this knowledge already loaded.
+**Discovery types:**
+- `pattern` — Recurring code patterns
+- `gotcha` — Warnings, pitfalls, things that tripped you up
+- `architecture` — High-level design insights
+- `file` — Important files (include filePath)
+- `convention` — Coding conventions observed
+
+**Why note immediately?**
+- You might forget by session end
+- Context compaction might lose the insight
+- Discoveries are stored in `.duo/discoveries.json` (survives compaction)
+
+**Search for prior context:**
+```
+duo_search query="[topic]" mode="keyword"
+```
+
+### At Session End
+
+Collected discoveries are **automatically presented** and can be included in CODEBASE.md:
+
+```
+👋 Duo session ended!
+
+Tasks completed: 10/14
+
+📝 Discoveries collected: 3
+⚠️ [gotcha] go-redis v9.15.0 doesn't exist, must use v9.7.0
+🔄 [pattern] Token refresh uses sliding window pattern
+📄 [file] OAuth service implementation (core-api/internal/service/google.go)
+
+📚 CODEBASE.md updated with discoveries + knowledge
+```
+
+**By default, discoveries are auto-included.** You can also pass explicit updates:
+
+```typescript
+duo_session_end({
+  summary: "Implemented OAuth flow with PKCE",
+  keyLearnings: [
+    "Google OAuth requires state parameter validation"
+  ],
+  tags: ["auth", "oauth"],
+  includeDiscoveries: true,  // default: auto-include collected discoveries
+  codebaseUpdates: {         // additional explicit updates
+    architecture: "OAuth uses PKCE flow for mobile clients"
+  }
+})
+```
 
 ### The Knowledge Graph
 

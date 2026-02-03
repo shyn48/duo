@@ -11,6 +11,7 @@ import { ensureMemoryDir } from "../memory/checkpoint.js";
 import { ensureChatDir } from "../memory/chat.js";
 import { saveSessionMetadata } from "./memory.js";
 import { readCodebaseKnowledge, appendCodebaseKnowledge } from "./codebase.js";
+import { readDiscoveries, clearDiscoveries, formatDiscoveries, discoveriesToCodebaseUpdates } from "./discovery.js";
 let dashboardInstance = null;
 function openBrowser(url) {
     const platform = process.platform;
@@ -263,7 +264,7 @@ export function registerSessionTools(server) {
         };
     });
     // ── End session ──
-    server.tool("duo_session_end", "End the current Duo session. Auto-archives for future recall and prompts for codebase knowledge updates.", {
+    server.tool("duo_session_end", "End the current Duo session. Shows collected discoveries and prompts for CODEBASE.md updates.", {
         summary: z
             .string()
             .optional()
@@ -288,12 +289,17 @@ export function registerSessionTools(server) {
             conventions: z.array(z.string()).optional().describe("Coding conventions observed"),
         })
             .optional()
-            .describe("Updates to add to CODEBASE.md for future sessions"),
+            .describe("Updates to add to CODEBASE.md (or use includeDiscoveries to auto-include)"),
+        includeDiscoveries: z
+            .boolean()
+            .optional()
+            .default(true)
+            .describe("Automatically include collected discoveries in CODEBASE.md"),
         keepState: z
             .boolean()
             .describe("Keep .duo state files for reference")
             .default(true),
-    }, async ({ summary, keyLearnings, tags, codebaseUpdates, keepState }) => {
+    }, async ({ summary, keyLearnings, tags, codebaseUpdates, includeDiscoveries, keepState }) => {
         const state = await getStateInstanceAutoLoad();
         if (!state) {
             return {
@@ -305,6 +311,9 @@ export function registerSessionTools(server) {
         const session = state.getSession();
         const tasks = state.getTasks();
         const done = tasks.filter((t) => t.status === "done").length;
+        // Read collected discoveries
+        const discoveries = await readDiscoveries(state.getStateDir());
+        const hasDiscoveries = discoveries.length > 0;
         // Auto-generate summary if not provided
         const autoSummary = summary ||
             `${session.design?.taskDescription || "Duo session"} — ${done}/${tasks.length} tasks completed`;
@@ -316,18 +325,42 @@ export function registerSessionTools(server) {
         catch (e) {
             console.error("Failed to archive session:", e);
         }
-        // 📚 Update CODEBASE.md if updates provided
+        // 📚 Update CODEBASE.md
         let codebaseUpdated = false;
-        if (codebaseUpdates && Object.keys(codebaseUpdates).length > 0) {
+        // Merge explicit codebaseUpdates with discoveries (if includeDiscoveries is true)
+        let finalUpdates = codebaseUpdates || {};
+        if (includeDiscoveries && hasDiscoveries) {
+            const discoveryUpdates = discoveriesToCodebaseUpdates(discoveries);
+            // Merge: discoveries + explicit (explicit wins on conflict)
+            finalUpdates = {
+                architecture: finalUpdates.architecture || discoveryUpdates.architecture,
+                patterns: [...(discoveryUpdates.patterns || []), ...(finalUpdates.patterns || [])],
+                files: [...(discoveryUpdates.files || []), ...(finalUpdates.files || [])],
+                gotchas: [...(discoveryUpdates.gotchas || []), ...(finalUpdates.gotchas || [])],
+                conventions: [...(discoveryUpdates.conventions || []), ...(finalUpdates.conventions || [])],
+            };
+            // Clean up empty arrays
+            if (finalUpdates.patterns?.length === 0)
+                delete finalUpdates.patterns;
+            if (finalUpdates.files?.length === 0)
+                delete finalUpdates.files;
+            if (finalUpdates.gotchas?.length === 0)
+                delete finalUpdates.gotchas;
+            if (finalUpdates.conventions?.length === 0)
+                delete finalUpdates.conventions;
+        }
+        if (Object.keys(finalUpdates).length > 0) {
             try {
-                await appendCodebaseKnowledge(state.getStateDir(), codebaseUpdates);
+                await appendCodebaseKnowledge(state.getStateDir(), finalUpdates);
                 codebaseUpdated = true;
             }
             catch (e) {
                 console.error("Failed to update codebase knowledge:", e);
             }
         }
-        await state.logChat("system", "event", `Session ended — ${done}/${tasks.length} tasks done`);
+        // Clear discoveries for next session
+        await clearDiscoveries(state.getStateDir());
+        await state.logChat("system", "event", `Session ended — ${done}/${tasks.length} tasks done, ${discoveries.length} discoveries`);
         // Stop dashboard
         if (dashboardInstance) {
             await dashboardInstance.stop();
@@ -337,24 +370,34 @@ export function registerSessionTools(server) {
             await state.clear();
         }
         setStateInstance(null);
+        // Build response with discovery summary
+        const responseLines = [
+            "👋 Duo session ended!",
+            "",
+            `Tasks completed: ${done}/${tasks.length}`,
+        ];
+        if (hasDiscoveries) {
+            responseLines.push("");
+            responseLines.push(`📝 Discoveries collected: ${discoveries.length}`);
+            responseLines.push(formatDiscoveries(discoveries));
+        }
+        responseLines.push("");
+        responseLines.push(archivePath
+            ? `📁 Archived: ${archivePath}`
+            : "⚠️ Archive failed");
+        responseLines.push(codebaseUpdated
+            ? `📚 CODEBASE.md updated with ${hasDiscoveries ? "discoveries + " : ""}knowledge`
+            : (hasDiscoveries
+                ? "⚠️ Discoveries not saved (pass includeDiscoveries: true)"
+                : "💡 Tip: Use duo_note_discovery during sessions to collect insights"));
+        responseLines.push(keepState
+            ? "State files preserved in .duo/"
+            : "State files cleaned up.");
         return {
             content: [
                 {
                     type: "text",
-                    text: [
-                        "👋 Duo session ended!",
-                        "",
-                        `Tasks completed: ${done}/${tasks.length}`,
-                        archivePath
-                            ? `📁 Archived: ${archivePath}`
-                            : "⚠️ Archive failed",
-                        codebaseUpdated
-                            ? "📚 CODEBASE.md updated with new knowledge"
-                            : "💡 Tip: Pass codebaseUpdates to persist patterns/gotchas for future sessions",
-                        keepState
-                            ? "State files preserved in .duo/"
-                            : "State files cleaned up.",
-                    ].join("\n"),
+                    text: responseLines.join("\n"),
                 },
             ],
         };

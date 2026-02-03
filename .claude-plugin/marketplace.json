@@ -12,7 +12,7 @@
       "name": "duo",
       "source": "./",
       "description": "Collaborative pair programming — split coding between human and AI",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "category": "development-workflows",
       "tags": ["pair-programming", "collaborative", "code-review", "mcp"],
       "strict": true
