@@ -1,6 +1,6 @@
 {
   "name": "duo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Collaborative pair programming — split coding tasks between human and AI for better code quality and codebase understanding",
   "author": {
     "name": "Shayan",
