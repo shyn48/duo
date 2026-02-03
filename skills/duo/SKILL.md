@@ -32,6 +32,79 @@ description: Collaborative pair programming workflow that splits coding tasks be
 3. **Enjoyability** — Human codes the interesting parts, AI handles the tedious parts
 4. **Speed** — Parallel execution keeps delivery fast despite human involvement
 
+
+## Large Codebase Context Management
+
+Duo sessions persist and accumulate knowledge. On large codebases, **proactively leverage past sessions** to avoid re-learning the same things.
+
+### At Session Start (ALWAYS do this)
+
+1. **Query past sessions:**
+   ```
+   duo_memory_recall query="[feature/area you're working on]" limit=5
+   ```
+2. **Review learnings:** Past sessions contain `keyLearnings` about architecture, gotchas, patterns
+3. **Build context:** Summarize relevant prior work before diving into design
+4. **Check for related docs:** Look in `.duo/docs/` for architecture decisions, patterns, prior reviews
+
+### During Session
+
+1. **Search before asking:** When uncertain about a pattern or decision, try:
+   ```
+   duo_search query="[topic]" mode="keyword"
+   ```
+2. **Document as you go:** When you discover something important about the codebase:
+   - Architecture patterns → `duo_document_save` to `.duo/docs/`
+   - Gotchas/warnings → Note in session for `keyLearnings`
+   - File relationships → Document in design
+3. **Cross-reference:** When touching files discussed in prior sessions, recall that context
+
+### Context Preservation (Proactive)
+
+**Don't wait for compaction to lose context.** When working on complex tasks:
+
+1. **Save important decisions early:**
+   ```
+   duo_document_save content="[architecture decision]" filename="auth-flow-design"
+   ```
+2. **Checkpoint before risky operations:** The system auto-checkpoints on task completion, but you can note important state in docs
+3. **Summarize in reviews:** During cross-review, capture insights that future sessions should know
+
+### At Session End (Build Future Context)
+
+**The quality of session end determines the quality of future session starts.**
+
+1. **Meaningful summary:** Not "completed tasks" but "what this session accomplished and why it matters"
+2. **Key learnings:** Architecture decisions, patterns discovered, gotchas encountered:
+   ```
+   duo_session_end summary="Implemented OAuth flow with PKCE" keyLearnings=[
+     "Google OAuth requires state parameter validation",
+     "Token refresh uses sliding window pattern",
+     "User service expects email to be verified"
+   ] tags=["auth", "oauth", "google"]
+   ```
+3. **Descriptive tags:** Use consistent tags for feature areas so `duo_memory_recall` can find related sessions
+
+### Codebase Knowledge Graph
+
+Over time, Duo sessions build a knowledge graph of your codebase:
+
+```
+.duo/
+├── sessions/           # Archived sessions with learnings
+│   ├── 2026-02-01...   # OAuth implementation session
+│   ├── 2026-02-02...   # 2FA integration session
+│   └── 2026-02-03...   # Payment flow session
+├── docs/               # Persistent documentation
+│   ├── auth-architecture.md
+│   ├── api-patterns.md
+│   └── testing-strategy.md
+├── memory/             # Checkpoints for recovery
+└── chat/               # Full conversation history
+```
+
+**Use this graph.** When starting work in an area, query for prior sessions and docs. When finishing, contribute back.
+
 ## Workflow
 
 Follow these phases in order. Do not skip phases unless the human explicitly asks.
