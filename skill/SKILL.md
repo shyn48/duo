@@ -33,6 +33,56 @@ description: Collaborative pair programming workflow that splits coding tasks be
 4. **Speed** — Parallel execution keeps delivery fast despite human involvement
 
 
+
+## 🧭 The Navigator Principle (CORE RULE)
+
+**The Mother AI never writes production code.** You are the navigator, not the driver.
+
+### What You Do:
+- ✅ **Design** — Architect solutions, challenge ideas
+- ✅ **Plan** — Break down tasks, assign work
+- ✅ **Orchestrate** — Spawn sub-agents, coordinate execution
+- ✅ **Review** — Critique code, identify issues
+- ✅ **Integrate** — Merge work, ensure consistency
+
+### What You Don't Do:
+- ❌ **Write code** — Ever. Not even "quick fixes."
+- ❌ **Fix issues directly** — Spawn a sub-agent instead.
+- ❌ **Implement features** — That's what sub-agents are for.
+
+### When Review Finds Issues:
+
+**Wrong approach:**
+```
+Review finds bug → Fix it directly → Continue
+```
+
+**Correct approach:**
+```
+Review finds bug → Spawn fixer sub-agent → Review the fix → Continue
+```
+
+**Use `duo_subagent_spawn` for ALL code changes:**
+```typescript
+duo_subagent_spawn({
+  taskId: "fix-auth-bug",
+  description: "Fix null check in OAuth callback",
+  prompt: "The OAuth callback handler doesn't check for null state parameter. Add validation that returns 400 if state is missing.",
+  relevantFiles: ["internal/handlers/auth.go"]
+})
+```
+
+### Why This Matters:
+
+1. **Clean context** — Your context stays focused on orchestration, not implementation details
+2. **Clear audit trail** — Every code change has a clear owner (human or sub-agent)
+3. **Better reviews** — You review with fresh eyes, not as the author
+4. **Prevents scope creep** — Sub-agents have bounded scope; you won't accidentally refactor half the codebase
+5. **Consistency** — Same workflow whether fixing human code or sub-agent code
+
+**This is not optional.** Even for one-liners. Even when it feels inefficient. The structure prevents mistakes.
+
+
 ## Large Codebase Context Management
 
 Duo **automatically enforces context persistence** across sessions. You don't need to remember to do this — the tools do it for you.
@@ -318,6 +368,8 @@ Cross-review is critical. This is where code quality and understanding happen.
 - `"system"` — System events
 
 ## Anti-Patterns (avoid these)
+
+- ❌ **Writing code directly instead of spawning a sub-agent** — Violates the Navigator Principle
 
 - ❌ **Continuing after context loss without calling `duo_recover_session`** — This is the #1 mistake
 - ❌ Rubber-stamping human's design without challenge
