@@ -95,6 +95,8 @@ export function registerSubagentTools(server) {
         }
         contextParts.push("", "## Task Instructions", prompt, "", "## Constraints", "- Stay focused on the assigned task", "- Follow the design decisions above", "- Report completion status when done");
         const subagentPrompt = contextParts.join("\n");
+        // Log subagent spawn
+        await state.logChat("system", "event", `Sub-agent spawned for task [${taskId}]: ${description}`, taskId);
         // Track the subagent in session state
         const spawnedAt = new Date().toISOString();
         await state.addSubagent({

@@ -20824,14 +20824,118 @@ var StdioServerTransport = class {
 };
 
 // dist/state.js
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile as readFile3, writeFile as writeFile2, mkdir as mkdir3 } from "node:fs/promises";
+import { existsSync as existsSync3 } from "node:fs";
+import { join as join3 } from "node:path";
+
+// dist/memory/checkpoint.js
+import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+async function ensureMemoryDir(stateDir) {
+  const memoryDir = join(stateDir, "memory");
+  if (!existsSync(memoryDir)) {
+    await mkdir(memoryDir, { recursive: true });
+  }
+  return memoryDir;
+}
+async function writeCheckpoint(stateDir, data) {
+  const memoryDir = await ensureMemoryDir(stateDir);
+  const timestamp = (/* @__PURE__ */ new Date()).toISOString();
+  const decisions = data.design?.decisions ?? [];
+  const filesModified = Array.from(new Set(data.tasks.flatMap((t) => t.files)));
+  const checkpoint = {
+    timestamp,
+    phase: data.phase,
+    tasks: data.tasks,
+    design: data.design,
+    subagents: data.subagents,
+    decisions,
+    filesModified,
+    context: data.context ?? ""
+  };
+  const safeTimestamp = timestamp.replace(/[:.]/g, "-");
+  const filename = `checkpoint-${safeTimestamp}.jsonl`;
+  const filePath = join(memoryDir, filename);
+  await writeFile(filePath, JSON.stringify(checkpoint) + "\n");
+  return filename;
+}
+async function listCheckpoints(stateDir) {
+  const memoryDir = join(stateDir, "memory");
+  if (!existsSync(memoryDir))
+    return [];
+  const files = await readdir(memoryDir);
+  return files.filter((f) => f.startsWith("checkpoint-") && f.endsWith(".jsonl")).sort().reverse();
+}
+async function readLatestCheckpoint(stateDir) {
+  const files = await listCheckpoints(stateDir);
+  if (files.length === 0)
+    return null;
+  const memoryDir = join(stateDir, "memory");
+  const content = await readFile(join(memoryDir, files[0]), "utf-8");
+  const line = content.trim().split("\n")[0];
+  return JSON.parse(line);
+}
+
+// dist/memory/chat.js
+import { appendFile, readFile as readFile2, mkdir as mkdir2 } from "node:fs/promises";
+import { existsSync as existsSync2 } from "node:fs";
+import { join as join2 } from "node:path";
+async function ensureChatDir(stateDir) {
+  const chatDir = join2(stateDir, "chat");
+  if (!existsSync2(chatDir)) {
+    await mkdir2(chatDir, { recursive: true });
+  }
+  return chatDir;
+}
+var ChatLogger = class {
+  filePath;
+  chatDir;
+  constructor(stateDir, sessionStartedAt) {
+    this.chatDir = join2(stateDir, "chat");
+    const safeTimestamp = sessionStartedAt.replace(/[:.]/g, "-");
+    this.filePath = join2(this.chatDir, `session-${safeTimestamp}.jsonl`);
+  }
+  /**
+   * Append a chat entry to the log file.
+   */
+  async log(entry) {
+    if (!existsSync2(this.chatDir)) {
+      await mkdir2(this.chatDir, { recursive: true });
+    }
+    const full = {
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      ...entry
+    };
+    await appendFile(this.filePath, JSON.stringify(full) + "\n");
+  }
+  /**
+   * Read the last N entries from the log.
+   */
+  async getHistory(limit) {
+    if (!existsSync2(this.filePath))
+      return [];
+    const content = await readFile2(this.filePath, "utf-8");
+    const lines = content.trim().split("\n").filter(Boolean);
+    const entries = lines.map((line) => JSON.parse(line));
+    if (limit !== void 0 && limit > 0) {
+      return entries.slice(-limit);
+    }
+    return entries;
+  }
+  getFilePath() {
+    return this.filePath;
+  }
+};
+
+// dist/state.js
 var DuoState = class {
   session;
   config;
   stateDir;
   dashboard = null;
+  messageCount = 0;
+  chatLogger = null;
   constructor(projectRoot, config2) {
     const defaults = {
       stateDir: ".duo",
@@ -20847,7 +20951,7 @@ var DuoState = class {
       ]
     };
     this.config = { ...defaults, ...config2 };
-    this.stateDir = join(projectRoot, this.config.stateDir);
+    this.stateDir = join3(projectRoot, this.config.stateDir);
     this.session = {
       phase: "idle",
       projectRoot,
@@ -20870,34 +20974,35 @@ var DuoState = class {
   }
   // ── Initialization ──
   async init() {
-    if (!existsSync(this.stateDir)) {
-      await mkdir(this.stateDir, { recursive: true });
+    if (!existsSync3(this.stateDir)) {
+      await mkdir3(this.stateDir, { recursive: true });
     }
-    const sessionPath = join(this.stateDir, "session.json");
-    if (existsSync(sessionPath)) {
-      const data = await readFile(sessionPath, "utf-8");
+    const sessionPath = join3(this.stateDir, "session.json");
+    if (existsSync3(sessionPath)) {
+      const data = await readFile3(sessionPath, "utf-8");
       this.session = JSON.parse(data);
       if (!this.session.subagents) {
         this.session.subagents = [];
       }
     }
-    const prefsPath = join(this.stateDir, "preferences.json");
-    if (existsSync(prefsPath)) {
-      const data = await readFile(prefsPath, "utf-8");
+    const prefsPath = join3(this.stateDir, "preferences.json");
+    if (existsSync3(prefsPath)) {
+      const data = await readFile3(prefsPath, "utf-8");
       this.session.preferences = JSON.parse(data);
     }
+    this.chatLogger = new ChatLogger(this.stateDir, this.session.startedAt);
   }
   // ── Persistence ──
   async save() {
     this.session.updatedAt = now();
-    await writeFile(join(this.stateDir, "session.json"), JSON.stringify(this.session, null, 2));
+    await writeFile2(join3(this.stateDir, "session.json"), JSON.stringify(this.session, null, 2));
   }
   async savePreferences() {
-    await writeFile(join(this.stateDir, "preferences.json"), JSON.stringify(this.session.preferences, null, 2));
+    await writeFile2(join3(this.stateDir, "preferences.json"), JSON.stringify(this.session.preferences, null, 2));
   }
   async saveDesign() {
     if (this.session.design) {
-      await writeFile(join(this.stateDir, "design.md"), formatDesignDoc(this.session.design));
+      await writeFile2(join3(this.stateDir, "design.md"), formatDesignDoc(this.session.design));
     }
   }
   // ── Phase Management ──
@@ -21035,6 +21140,29 @@ var DuoState = class {
   getSubagents() {
     return this.session.subagents ?? [];
   }
+  // ── Checkpoints ──
+  async checkpoint(context) {
+    this.messageCount++;
+    return writeCheckpoint(this.stateDir, {
+      phase: this.session.phase,
+      tasks: this.session.taskBoard.tasks,
+      design: this.session.design,
+      subagents: this.session.subagents ?? [],
+      context
+    });
+  }
+  getMessageCount() {
+    return this.messageCount;
+  }
+  // ── Chat Logging ──
+  async logChat(from, type, content, taskId) {
+    if (this.chatLogger) {
+      await this.chatLogger.log({ from, type, content, taskId });
+    }
+  }
+  getChatLogger() {
+    return this.chatLogger;
+  }
   // ── State Directory ──
   getStateDir() {
     return this.stateDir;
@@ -21096,10 +21224,10 @@ async function getStateInstanceAutoLoad() {
   const projectRoot = process.env.DUO_PROJECT_ROOT;
   if (!projectRoot)
     return null;
-  const { existsSync: existsSync3 } = await import("node:fs");
-  const { join: join4 } = await import("node:path");
-  const sessionPath = join4(projectRoot, ".duo", "session.json");
-  if (!existsSync3(sessionPath))
+  const { existsSync: existsSync7 } = await import("node:fs");
+  const { join: join8 } = await import("node:path");
+  const sessionPath = join8(projectRoot, ".duo", "session.json");
+  if (!existsSync7(sessionPath))
     return null;
   const state = new DuoState(projectRoot);
   await state.init();
@@ -21200,8 +21328,8 @@ ${design.agreedDesign}`
 
 // dist/dashboard/server.js
 import { createServer } from "node:http";
-import { readFile as readFile2 } from "node:fs/promises";
-import { join as join2, dirname } from "node:path";
+import { readFile as readFile4 } from "node:fs/promises";
+import { join as join4, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = dirname(__filename);
@@ -21261,7 +21389,7 @@ var DashboardServer = class {
     }
     if (url === "/" || url === "/index.html") {
       try {
-        const html = await readFile2(join2(__dirname, "index.html"), "utf-8");
+        const html = await readFile4(join4(__dirname, "index.html"), "utf-8");
         res.writeHead(200, { "Content-Type": "text/html" });
         res.end(html);
       } catch (err) {
@@ -21333,16 +21461,16 @@ var DashboardServer = class {
 import { exec } from "node:child_process";
 
 // dist/tools/document.js
-import { mkdir as mkdir2, writeFile as writeFile2 } from "node:fs/promises";
-import { existsSync as existsSync2 } from "node:fs";
-import { join as join3 } from "node:path";
+import { mkdir as mkdir4, writeFile as writeFile3 } from "node:fs/promises";
+import { existsSync as existsSync4 } from "node:fs";
+import { join as join5 } from "node:path";
 function slugify(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
 }
 async function ensureDocsDir(stateDir) {
-  const docsDir = join3(stateDir, "docs");
-  if (!existsSync2(docsDir)) {
-    await mkdir2(docsDir, { recursive: true });
+  const docsDir = join5(stateDir, "docs");
+  if (!existsSync4(docsDir)) {
+    await mkdir4(docsDir, { recursive: true });
   }
   return docsDir;
 }
@@ -21351,7 +21479,7 @@ async function saveDocument(stateDir, opts) {
   const date3 = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const slug = slugify(opts.title);
   const filename = `${opts.phase}-${date3}-${slug}.md`;
-  const filePath = join3(docsDir, filename);
+  const filePath = join5(docsDir, filename);
   const header = [
     "---",
     `title: "${opts.title}"`,
@@ -21361,7 +21489,7 @@ async function saveDocument(stateDir, opts) {
     "---",
     ""
   ].filter((line) => line !== null).join("\n");
-  await writeFile2(filePath, header + opts.content);
+  await writeFile3(filePath, header + opts.content);
   return filename;
 }
 function registerDocumentTools(server) {
@@ -21430,12 +21558,15 @@ function registerSessionTools(server) {
     const state = new DuoState(projectRoot);
     await state.init();
     await ensureDocsDir(state.getStateDir());
+    await ensureMemoryDir(state.getStateDir());
+    await ensureChatDir(state.getStateDir());
     const session = state.getSession();
     const isExisting = session.taskBoard.tasks.length > 0 || session.phase !== "idle";
     if (!isExisting) {
       await state.setPhase("design");
     }
     setStateInstance(state);
+    await state.logChat("system", "event", isExisting ? "Session resumed" : "Session started");
     try {
       dashboardInstance = new DashboardServer(state, dashboardPort);
       state.setDashboard(dashboardInstance);
@@ -21550,6 +21681,11 @@ function registerSessionTools(server) {
       };
     }
     await state.setPhase(phase);
+    try {
+      await state.checkpoint(`Phase transition to ${phase}`);
+    } catch {
+    }
+    await state.logChat("system", "event", `Phase advanced to ${phase}`);
     const phaseMessages = {
       design: "\u{1F3A8} Design phase \u2014 Let's discuss the approach.",
       planning: "\u{1F4CB} Planning phase \u2014 Breaking down tasks and assigning work.",
@@ -21641,6 +21777,7 @@ Doc: ${filename}`;
     }
     const tasks = state.getTasks();
     const done = tasks.filter((t) => t.status === "done").length;
+    await state.logChat("system", "event", `Session ended \u2014 ${done}/${tasks.length} tasks done`);
     if (dashboardInstance) {
       await dashboardInstance.stop();
       dashboardInstance = null;
@@ -21738,6 +21875,7 @@ function registerTaskTools(server) {
     }
     try {
       const task = await state.updateTaskStatus(id, status);
+      await state.logChat("system", "event", `Task [${id}] status \u2192 ${status}`, id);
       const statusIcons = {
         todo: "\u2B1C",
         in_progress: "\u{1F535}",
@@ -21782,6 +21920,7 @@ function registerTaskTools(server) {
     }
     try {
       const task = await state.reassignTask(id, assignee);
+      await state.logChat("system", "event", `Task [${id}] reassigned to ${assignee}`, id);
       const icon = assignee === "human" ? "\u{1F9D1}" : "\u{1F916}";
       return {
         content: [
@@ -21928,6 +22067,7 @@ function registerReviewTools(server) {
       if (approved) {
         await state.updateTaskStatus(taskId, "done");
       }
+      await state.logChat("system", "event", `Review for task [${taskId}]: ${approved ? "approved" : "changes requested"}${feedback ? ` \u2014 ${feedback}` : ""}`, taskId);
       const icon = approved ? "\u2705" : "\u{1F504}";
       return {
         content: [
@@ -21987,6 +22127,7 @@ Feedback: ${feedback}` : ""
     const humanTasks = tasks.filter((t) => t.assignee === "human");
     const aiTasks = tasks.filter((t) => t.assignee === "ai");
     await state.setPhase("integrating");
+    await state.logChat("system", "event", `Integration started \u2014 all ${tasks.length} tasks complete`);
     const summaryContent = [
       `# Integration Summary`,
       "",
@@ -22116,6 +22257,7 @@ function registerSubagentTools(server) {
     }
     contextParts.push("", "## Task Instructions", prompt, "", "## Constraints", "- Stay focused on the assigned task", "- Follow the design decisions above", "- Report completion status when done");
     const subagentPrompt = contextParts.join("\n");
+    await state.logChat("system", "event", `Sub-agent spawned for task [${taskId}]: ${description}`, taskId);
     const spawnedAt = (/* @__PURE__ */ new Date()).toISOString();
     await state.addSubagent({
       taskId,
@@ -22155,6 +22297,440 @@ function registerSubagentTools(server) {
   });
 }
 
+// dist/tools/recover.js
+function registerRecoverTools(server) {
+  server.tool("duo_recover_session", "Recover a Duo session from the most recent memory checkpoint. Auto-detects checkpoints in .duo/memory/. Use this after a crash or context loss.", {}, async () => {
+    const state = await getStateInstanceAutoLoad();
+    if (!state) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "No active Duo session. Use duo_session_start to begin."
+          }
+        ]
+      };
+    }
+    const stateDir = state.getStateDir();
+    const files = await listCheckpoints(stateDir);
+    if (files.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "No checkpoints found in .duo/memory/. Nothing to recover."
+          }
+        ]
+      };
+    }
+    const checkpoint = await readLatestCheckpoint(stateDir);
+    if (!checkpoint) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Failed to read latest checkpoint."
+          }
+        ],
+        isError: true
+      };
+    }
+    await state.setPhase(checkpoint.phase);
+    if (checkpoint.design) {
+      await state.setDesign(checkpoint.design);
+    }
+    const currentTasks = state.getTasks();
+    const checkpointTaskIds = new Set(checkpoint.tasks.map((t) => t.id));
+    for (const task of checkpoint.tasks) {
+      const existing = state.getTask(task.id);
+      if (!existing) {
+        await state.addTask(task.id, task.description, task.assignee, task.files);
+      }
+      const current = state.getTask(task.id);
+      if (current && current.status !== task.status) {
+        await state.updateTaskStatus(task.id, task.status);
+      }
+    }
+    const existingSubagents = state.getSubagents();
+    for (const sub of checkpoint.subagents) {
+      const alreadyTracked = existingSubagents.some((s) => s.taskId === sub.taskId && s.spawnedAt === sub.spawnedAt);
+      if (!alreadyTracked) {
+        await state.addSubagent(sub);
+      }
+    }
+    await state.logChat("system", "event", `Session recovered from checkpoint at ${checkpoint.timestamp}`);
+    const totalTasks = checkpoint.tasks.length;
+    const doneTasks = checkpoint.tasks.filter((t) => t.status === "done").length;
+    return {
+      content: [
+        {
+          type: "text",
+          text: [
+            `\u{1F504} Session recovered!`,
+            "",
+            `Phase: ${checkpoint.phase}`,
+            `Tasks: ${doneTasks}/${totalTasks} completed`,
+            `Checkpoints available: ${files.length}`,
+            `Last checkpoint: ${checkpoint.timestamp}`,
+            checkpoint.context ? `Context: ${checkpoint.context}` : "",
+            "",
+            checkpoint.decisions.length > 0 ? `Key decisions: ${checkpoint.decisions.join(", ")}` : "",
+            checkpoint.filesModified.length > 0 ? `Files modified: ${checkpoint.filesModified.join(", ")}` : ""
+          ].filter(Boolean).join("\n")
+        }
+      ]
+    };
+  });
+}
+
+// dist/tools/search.js
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { existsSync as existsSync5 } from "node:fs";
+import { join as join6 } from "node:path";
+var execFileAsync = promisify(execFile);
+var DuoSearchSchema = {
+  query: external_exports.string().describe("Search query for session context"),
+  mode: external_exports.enum(["keyword", "semantic"]).default("keyword").describe("Search mode: 'keyword' for fast BM25, 'semantic' for vector search"),
+  limit: external_exports.number().optional().default(5).describe("Number of results to return"),
+  collection: external_exports.string().optional().describe("Specific QMD collection to search (defaults to duo-session)")
+};
+async function executeQmdSearch(query, mode, limit, collection) {
+  try {
+    const args = [
+      mode === "semantic" ? "vsearch" : "search",
+      query,
+      "-n",
+      String(limit),
+      "--json"
+    ];
+    if (collection) {
+      args.push("-c", collection);
+    }
+    const { stdout } = await execFileAsync("qmd", args);
+    if (!stdout.trim()) {
+      return [];
+    }
+    const results = JSON.parse(stdout);
+    if (Array.isArray(results)) {
+      return results.map((r) => ({
+        path: r.path || r.file || "",
+        score: r.score || r.similarity || 0,
+        excerpt: r.excerpt || r.content || "",
+        metadata: r.metadata || {}
+      }));
+    }
+    return [];
+  } catch (error2) {
+    if (error2.code === "ENOENT") {
+      throw new Error("QMD is not installed. Install with: bun install -g https://github.com/tobi/qmd");
+    }
+    throw error2;
+  }
+}
+async function ensureCollection(stateDir, sessionId) {
+  const chatDir = join6(stateDir, "chat");
+  const docsDir = join6(stateDir, "docs");
+  if (!existsSync5(chatDir) && !existsSync5(docsDir)) {
+    return;
+  }
+  try {
+    const { stdout } = await execFileAsync("qmd", ["collection", "list", "--json"]);
+    const collections = JSON.parse(stdout || "[]");
+    const collectionName = `duo-session`;
+    const exists = collections.some((c) => c.name === collectionName);
+    if (!exists && existsSync5(chatDir)) {
+      await execFileAsync("qmd", [
+        "collection",
+        "add",
+        chatDir,
+        "--name",
+        collectionName,
+        "--mask",
+        "**/*.jsonl"
+      ]);
+      await execFileAsync("qmd", ["update"]);
+    }
+    if (existsSync5(docsDir)) {
+      const docsCollectionName = `duo-docs`;
+      const docsExists = collections.some((c) => c.name === docsCollectionName);
+      if (!docsExists) {
+        await execFileAsync("qmd", [
+          "collection",
+          "add",
+          docsDir,
+          "--name",
+          docsCollectionName,
+          "--mask",
+          "**/*.md"
+        ]);
+        await execFileAsync("qmd", ["update"]);
+      }
+    }
+  } catch (error2) {
+    console.warn("QMD collection setup warning:", error2.message);
+  }
+}
+function registerSearchTools(server) {
+  server.tool("duo_search", "Search session context (chat history, documents) using QMD. Use keyword mode for fast searches, semantic mode for conceptual similarity.", DuoSearchSchema, async ({ query, mode, limit, collection }) => {
+    try {
+      const stateDir = process.env.DUO_STATE_DIR || ".duo";
+      const sessionId = process.env.DUO_SESSION_ID || "current";
+      await ensureCollection(stateDir, sessionId);
+      const results = await executeQmdSearch(query, mode, limit, collection || "duo-session");
+      if (results.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `No results found for query: "${query}"`
+            }
+          ]
+        };
+      }
+      const formattedResults = results.map((r, idx) => {
+        return `[${idx + 1}] ${r.path} (score: ${r.score.toFixed(3)})
+${r.excerpt}
+`;
+      }).join("\n---\n");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Found ${results.length} results for "${query}":
+
+${formattedResults}`
+          }
+        ]
+      };
+    } catch (error2) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Search failed: ${error2.message}`
+          }
+        ],
+        isError: true
+      };
+    }
+  });
+}
+
+// dist/tools/memory.js
+import { readFile as readFile5, writeFile as writeFile4, readdir as readdir2, mkdir as mkdir5 } from "node:fs/promises";
+import { existsSync as existsSync6 } from "node:fs";
+import { join as join7 } from "node:path";
+import { execFile as execFile2 } from "node:child_process";
+import { promisify as promisify2 } from "node:util";
+var execFileAsync2 = promisify2(execFile2);
+var DuoMemorySaveSchema = {
+  summary: external_exports.string().describe("Human-readable summary of the session"),
+  keyLearnings: external_exports.array(external_exports.string()).optional().describe("Important insights or decisions from this session"),
+  tags: external_exports.array(external_exports.string()).optional().describe("Tags for categorizing this session (e.g., 'refactoring', 'bugfix')")
+};
+var DuoMemoryRecallSchema = {
+  query: external_exports.string().optional().describe("Optional search query to find specific past sessions"),
+  limit: external_exports.number().optional().default(5).describe("Number of sessions to recall"),
+  tags: external_exports.array(external_exports.string()).optional().describe("Filter by specific tags")
+};
+async function ensureSessionsDir(stateDir) {
+  const sessionsDir = join7(stateDir, "sessions");
+  if (!existsSync6(sessionsDir)) {
+    await mkdir5(sessionsDir, { recursive: true });
+  }
+  return sessionsDir;
+}
+async function saveSessionMetadata(stateDir, session, summary, keyLearnings, tags) {
+  const sessionsDir = await ensureSessionsDir(stateDir);
+  const sessionId = session.startedAt.replace(/[:.]/g, "-");
+  const metadataPath = join7(sessionsDir, `${sessionId}.json`);
+  const completedTasks = session.taskBoard.tasks.filter((t) => t.status === "done").length;
+  const durationMs = Date.now() - new Date(session.startedAt).getTime();
+  const durationMinutes = Math.floor(durationMs / 1e3 / 60);
+  const metadata = {
+    sessionId,
+    startedAt: session.startedAt,
+    endedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    phase: session.phase,
+    summary,
+    keyLearnings,
+    tags,
+    stats: {
+      totalTasks: session.taskBoard.tasks.length,
+      completedTasks,
+      durationMinutes
+    }
+  };
+  await writeFile4(metadataPath, JSON.stringify(metadata, null, 2));
+  return metadataPath;
+}
+async function indexSessionWithQmd(stateDir, sessionId) {
+  try {
+    await execFileAsync2("qmd", ["update"]);
+  } catch (error2) {
+    console.warn("QMD indexing warning:", error2.message);
+  }
+}
+async function loadSessionMetadata(stateDir) {
+  const sessionsDir = await ensureSessionsDir(stateDir);
+  if (!existsSync6(sessionsDir)) {
+    return [];
+  }
+  const files = await readdir2(sessionsDir);
+  const jsonFiles = files.filter((f) => f.endsWith(".json"));
+  const sessions = [];
+  for (const file of jsonFiles) {
+    try {
+      const content = await readFile5(join7(sessionsDir, file), "utf-8");
+      sessions.push(JSON.parse(content));
+    } catch (error2) {
+      console.warn(`Failed to parse session metadata: ${file}`);
+    }
+  }
+  sessions.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+  return sessions;
+}
+function filterSessions(sessions, query, tags) {
+  let filtered = sessions;
+  if (tags && tags.length > 0) {
+    filtered = filtered.filter((s) => s.tags?.some((t) => tags.includes(t)));
+  }
+  if (query) {
+    const lowerQuery = query.toLowerCase();
+    filtered = filtered.filter((s) => s.summary.toLowerCase().includes(lowerQuery) || s.keyLearnings?.some((l) => l.toLowerCase().includes(lowerQuery)));
+  }
+  return filtered;
+}
+function formatSessionSummary(session) {
+  const date3 = new Date(session.startedAt).toLocaleString();
+  const tags = session.tags?.length ? ` [${session.tags.join(", ")}]` : "";
+  let output = `\u{1F4C5} ${date3}${tags}
+`;
+  output += `\u{1F4CA} ${session.stats.completedTasks}/${session.stats.totalTasks} tasks completed in ${session.stats.durationMinutes}m
+`;
+  output += `\u{1F4AD} ${session.summary}
+`;
+  if (session.keyLearnings && session.keyLearnings.length > 0) {
+    output += `
+\u{1F9E0} Key Learnings:
+`;
+    output += session.keyLearnings.map((l) => `  \u2022 ${l}`).join("\n");
+  }
+  return output;
+}
+function registerMemoryTools(server) {
+  server.tool("duo_memory_save", "Save current session to memory with a summary and key learnings for future recall.", DuoMemorySaveSchema, async ({ summary, keyLearnings, tags }) => {
+    try {
+      const stateDir = process.env.DUO_STATE_DIR || ".duo";
+      const sessionPath = join7(stateDir, "session.json");
+      if (!existsSync6(sessionPath)) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "No active session to save."
+            }
+          ],
+          isError: true
+        };
+      }
+      const sessionContent = await readFile5(sessionPath, "utf-8");
+      const session = JSON.parse(sessionContent);
+      const metadataPath = await saveSessionMetadata(stateDir, session, summary, keyLearnings, tags);
+      const sessionId = session.startedAt.replace(/[:.]/g, "-");
+      await indexSessionWithQmd(stateDir, sessionId);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `\u2705 Session saved to memory!
+
+${formatSessionSummary({
+              sessionId,
+              startedAt: session.startedAt,
+              endedAt: (/* @__PURE__ */ new Date()).toISOString(),
+              phase: session.phase,
+              summary,
+              keyLearnings,
+              tags,
+              stats: {
+                totalTasks: session.taskBoard.tasks.length,
+                completedTasks: session.taskBoard.tasks.filter((t) => t.status === "done").length,
+                durationMinutes: Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1e3 / 60)
+              }
+            })}
+
+Metadata saved to: ${metadataPath}`
+          }
+        ]
+      };
+    } catch (error2) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to save session: ${error2.message}`
+          }
+        ],
+        isError: true
+      };
+    }
+  });
+  server.tool("duo_memory_recall", "Recall previous Duo sessions to restore context. Filter by query or tags.", DuoMemoryRecallSchema, async ({ query, limit, tags }) => {
+    try {
+      const stateDir = process.env.DUO_STATE_DIR || ".duo";
+      const sessions = await loadSessionMetadata(stateDir);
+      if (sessions.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "No previous sessions found. Start a new session with duo_session_start."
+            }
+          ]
+        };
+      }
+      const filtered = filterSessions(sessions, query, tags);
+      const results = filtered.slice(0, limit);
+      if (results.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `No sessions found matching criteria. Total sessions: ${sessions.length}`
+            }
+          ]
+        };
+      }
+      const formattedResults = results.map((s, idx) => `
+[${idx + 1}]
+${formatSessionSummary(s)}`).join("\n\n---\n");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `\u{1F4DA} Found ${results.length} previous session(s):
+${formattedResults}
+
+Use duo_search to search specific session content.`
+          }
+        ]
+      };
+    } catch (error2) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to recall sessions: ${error2.message}`
+          }
+        ],
+        isError: true
+      };
+    }
+  });
+}
+
 // dist/tools/index.js
 function registerTools(server) {
   registerSessionTools(server);
@@ -22162,6 +22738,9 @@ function registerTools(server) {
   registerReviewTools(server);
   registerSubagentTools(server);
   registerDocumentTools(server);
+  registerRecoverTools(server);
+  registerSearchTools(server);
+  registerMemoryTools(server);
 }
 
 // dist/index.js

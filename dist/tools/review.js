@@ -73,6 +73,8 @@ export function registerReviewTools(server) {
             if (approved) {
                 await state.updateTaskStatus(taskId, "done");
             }
+            // Log review submission
+            await state.logChat("system", "event", `Review for task [${taskId}]: ${approved ? "approved" : "changes requested"}${feedback ? ` — ${feedback}` : ""}`, taskId);
             const icon = approved ? "✅" : "🔄";
             return {
                 content: [
@@ -135,6 +137,8 @@ export function registerReviewTools(server) {
         const humanTasks = tasks.filter((t) => t.assignee === "human");
         const aiTasks = tasks.filter((t) => t.assignee === "ai");
         await state.setPhase("integrating");
+        // Log integration
+        await state.logChat("system", "event", `Integration started — all ${tasks.length} tasks complete`);
         // Auto-save integration summary to .duo/docs/
         const summaryContent = [
             `# Integration Summary`,

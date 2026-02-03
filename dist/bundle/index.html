@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Duo Dashboard</title>
+  <title>Duo — Pair Programming Dashboard</title>
   <style>
     * {
       margin: 0;
@@ -11,45 +11,209 @@
       box-sizing: border-box;
     }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-      background: #0d1117;
-      color: #c9d1d9;
-      line-height: 1.6;
-      overflow-x: hidden;
+    :root {
+      /* Colors - inspired by Linear */
+      --bg-primary: #0a0a0a;
+      --bg-secondary: #111111;
+      --bg-tertiary: #1a1a1a;
+      --border-primary: #2a2a2a;
+      --border-secondary: #1f1f1f;
+      --text-primary: #f0f0f0;
+      --text-secondary: #9ca3af;
+      --text-tertiary: #6b7280;
+      --accent-blue: #3b82f6;
+      --accent-blue-hover: #2563eb;
+      --accent-green: #10b981;
+      --accent-yellow: #f59e0b;
+      --accent-red: #ef4444;
+      --accent-purple: #8b5cf6;
+      
+      /* Shadows */
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+      --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+      
+      /* Transitions */
+      --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.5;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Header */
     .header {
-      background: #161b22;
-      border-bottom: 1px solid #30363d;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-primary);
       padding: 1rem 2rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      backdrop-filter: blur(20px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
 
-    .header h1 {
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .logo-icon {
       font-size: 1.5rem;
+      filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.3));
+    }
+
+    .logo-text {
+      font-size: 1.25rem;
       font-weight: 600;
-      color: #58a6ff;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
 
     .status-badge {
-      display: inline-block;
-      padding: 0.25rem 0.75rem;
-      border-radius: 12px;
-      font-size: 0.875rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.375rem 0.875rem;
+      border-radius: 999px;
+      font-size: 0.813rem;
       font-weight: 500;
-      background: #1f6feb;
-      color: white;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-primary);
+      transition: var(--transition);
     }
 
+    .status-badge.connected {
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.3);
+      color: var(--accent-green);
+    }
+
+    .status-indicator {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-tertiary);
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    .status-badge.connected .status-indicator {
+      background: var(--accent-green);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Container */
     .container {
       max-width: 1400px;
       margin: 0 auto;
       padding: 2rem;
     }
 
+    /* Panel */
+    .panel {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: var(--shadow-sm);
+      transition: var(--transition);
+    }
+
+    .panel:hover {
+      border-color: var(--border-secondary);
+      box-shadow: var(--shadow-md);
+    }
+
+    .panel-header {
+      font-size: 0.938rem;
+      font-weight: 600;
+      margin-bottom: 1.25rem;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      letter-spacing: -0.01em;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+    }
+
+    /* Phase Indicator */
+    .phase-track {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      position: relative;
+      padding: 1rem 0;
+    }
+
+    .phase-step {
+      flex: 1;
+      text-align: center;
+      position: relative;
+      z-index: 2;
+    }
+
+    .phase-circle {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--bg-tertiary);
+      border: 2px solid var(--border-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 0.5rem;
+      transition: var(--transition);
+      font-size: 0.875rem;
+    }
+
+    .phase-step.active .phase-circle {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+      transform: scale(1.1);
+    }
+
+    .phase-step.completed .phase-circle {
+      background: var(--accent-green);
+      border-color: var(--accent-green);
+    }
+
+    .phase-label {
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      font-weight: 500;
+      transition: var(--transition);
+    }
+
+    .phase-step.active .phase-label {
+      color: var(--accent-blue);
+      font-weight: 600;
+    }
+
+    .phase-step.completed .phase-label {
+      color: var(--text-secondary);
+    }
+
+    /* Grid Layout */
     .grid {
       display: grid;
       grid-template-columns: 2fr 1fr;
@@ -57,229 +221,331 @@
       margin-bottom: 1.5rem;
     }
 
-    .panel {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 8px;
-      padding: 1.5rem;
-    }
-
-    .panel-header {
-      font-size: 1.125rem;
-      font-weight: 600;
-      margin-bottom: 1rem;
-      color: #c9d1d9;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .phase-indicator {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 1rem;
-    }
-
-    .phase-step {
-      flex: 1;
-      text-align: center;
-      padding: 0.75rem;
-      background: #21262d;
-      border-radius: 6px;
-      font-size: 0.875rem;
-      border: 2px solid transparent;
-      transition: all 0.2s;
-    }
-
-    .phase-step.active {
-      background: #1f6feb;
-      border-color: #58a6ff;
-      color: white;
-      font-weight: 600;
-    }
-
-    .phase-step.completed {
-      background: #238636;
-      color: white;
-    }
-
+    /* Task Board */
     .task-board {
       display: flex;
       flex-direction: column;
-      gap: 1rem;
+      gap: 1.25rem;
     }
 
     .task-section {
-      background: #0d1117;
-      border: 1px solid #30363d;
-      border-radius: 6px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-secondary);
+      border-radius: 8px;
       padding: 1rem;
     }
 
     .task-section-header {
       font-weight: 600;
-      margin-bottom: 0.75rem;
-      font-size: 1rem;
+      margin-bottom: 1rem;
+      font-size: 0.875rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-primary);
+    }
+
+    .task-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
     }
 
     .task-item {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      padding: 0.75rem;
-      margin-bottom: 0.5rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
+      border-radius: 8px;
+      padding: 0.875rem;
       display: flex;
       align-items: start;
       gap: 0.75rem;
-      transition: border-color 0.2s;
+      transition: var(--transition);
+      cursor: pointer;
     }
 
     .task-item:hover {
-      border-color: #58a6ff;
+      border-color: var(--accent-blue);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
     }
 
-    .task-item:last-child {
-      margin-bottom: 0;
+    .task-checkbox {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      border: 2px solid var(--border-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 0.125rem;
+      transition: var(--transition);
     }
 
-    .task-status {
-      font-size: 1.25rem;
-      line-height: 1;
+    .task-item.done .task-checkbox {
+      background: var(--accent-green);
+      border-color: var(--accent-green);
+    }
+
+    .task-item.in_progress .task-checkbox {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    .task-item.review .task-checkbox {
+      background: var(--accent-yellow);
+      border-color: var(--accent-yellow);
     }
 
     .task-content {
       flex: 1;
+      min-width: 0;
     }
 
     .task-description {
-      color: #c9d1d9;
-      margin-bottom: 0.25rem;
+      color: var(--text-primary);
+      margin-bottom: 0.375rem;
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+
+    .task-item.done .task-description {
+      color: var(--text-secondary);
+      text-decoration: line-through;
     }
 
     .task-meta {
-      font-size: 0.875rem;
-      color: #8b949e;
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .task-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
     }
 
     .task-files {
       margin-top: 0.5rem;
-      font-size: 0.8rem;
-      color: #58a6ff;
+      font-size: 0.75rem;
+      color: var(--accent-blue);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.375rem;
     }
 
+    .file-badge {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      padding: 0.125rem 0.5rem;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Courier New', monospace;
+    }
+
+    /* Stats */
     .stats {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 1rem;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.875rem;
     }
 
     .stat-box {
-      background: #0d1117;
-      border: 1px solid #30363d;
-      border-radius: 6px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-secondary);
+      border-radius: 8px;
       padding: 1rem;
       text-align: center;
+      transition: var(--transition);
+    }
+
+    .stat-box:hover {
+      border-color: var(--accent-blue);
+      transform: translateY(-2px);
     }
 
     .stat-value {
       font-size: 2rem;
       font-weight: 700;
-      color: #58a6ff;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.2;
+      margin-bottom: 0.25rem;
     }
 
     .stat-label {
-      font-size: 0.875rem;
-      color: #8b949e;
-      margin-top: 0.25rem;
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 500;
     }
 
+    /* Activity Feed */
     .activity-feed {
-      max-height: 400px;
+      max-height: 450px;
       overflow-y: auto;
+      padding-right: 0.5rem;
     }
 
     .activity-item {
-      padding: 0.75rem;
-      border-bottom: 1px solid #21262d;
+      padding: 0.875rem;
+      border-bottom: 1px solid var(--border-secondary);
       font-size: 0.875rem;
+      display: flex;
+      gap: 0.75rem;
+      transition: var(--transition);
+    }
+
+    .activity-item:hover {
+      background: var(--bg-tertiary);
     }
 
     .activity-item:last-child {
       border-bottom: none;
     }
 
-    .activity-time {
-      color: #8b949e;
-      font-size: 0.75rem;
-      margin-bottom: 0.25rem;
+    .activity-icon {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: var(--bg-tertiary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.875rem;
     }
 
+    .activity-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .activity-time {
+      color: var(--text-tertiary);
+      font-size: 0.688rem;
+      margin-bottom: 0.25rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .activity-message {
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .activity-message strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    /* Design Document */
     .design-doc {
-      background: #0d1117;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      padding: 1rem;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-secondary);
+      border-radius: 8px;
+      padding: 1.5rem;
       max-height: 500px;
       overflow-y: auto;
-      line-height: 1.8;
+      line-height: 1.7;
     }
 
     .design-doc h1 {
       font-size: 1.5rem;
       margin-bottom: 1rem;
-      color: #58a6ff;
+      color: var(--text-primary);
+      font-weight: 600;
+      letter-spacing: -0.02em;
     }
 
     .design-doc h2 {
-      font-size: 1.25rem;
+      font-size: 1.125rem;
       margin: 1.5rem 0 0.75rem;
-      color: #c9d1d9;
+      color: var(--text-primary);
+      font-weight: 600;
     }
 
     .design-doc p {
       margin-bottom: 1rem;
+      color: var(--text-secondary);
     }
 
     .design-doc ul {
       margin-left: 1.5rem;
       margin-bottom: 1rem;
+      color: var(--text-secondary);
+    }
+
+    .design-doc li {
+      margin-bottom: 0.5rem;
     }
 
     .design-doc code {
-      background: #161b22;
-      padding: 0.2rem 0.4rem;
-      border-radius: 3px;
+      background: var(--bg-tertiary);
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
       font-family: 'Monaco', 'Courier New', monospace;
       font-size: 0.875rem;
+      color: var(--accent-blue);
+      border: 1px solid var(--border-primary);
     }
 
+    /* Empty State */
     .empty-state {
       text-align: center;
-      color: #8b949e;
-      padding: 2rem;
+      color: var(--text-tertiary);
+      padding: 3rem 2rem;
       font-size: 0.875rem;
     }
 
+    .empty-state-icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+      opacity: 0.5;
+    }
+
+    /* Scrollbar */
     ::-webkit-scrollbar {
       width: 8px;
+      height: 8px;
     }
 
     ::-webkit-scrollbar-track {
-      background: #0d1117;
+      background: var(--bg-primary);
     }
 
     ::-webkit-scrollbar-thumb {
-      background: #30363d;
+      background: var(--border-primary);
       border-radius: 4px;
     }
 
     ::-webkit-scrollbar-thumb:hover {
-      background: #484f58;
+      background: var(--border-secondary);
     }
 
+    /* Responsive */
     @media (max-width: 1024px) {
       .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 1rem;
+      }
+
+      .header {
+        padding: 1rem;
+      }
+
+      .stats {
         grid-template-columns: 1fr;
       }
     }
@@ -287,35 +553,59 @@
 </head>
 <body>
   <div class="header">
-    <h1>🤝 Duo Dashboard</h1>
-    <span class="status-badge" id="connection-status">Connecting...</span>
+    <div class="logo">
+      <div class="logo-icon">🤝</div>
+      <div class="logo-text">Duo</div>
+    </div>
+    <div class="status-badge" id="connection-status">
+      <div class="status-indicator"></div>
+      <span>Connecting...</span>
+    </div>
   </div>
 
   <div class="container">
     <!-- Phase Indicator -->
     <div class="panel">
-      <div class="panel-header">🎯 Workflow Phase</div>
-      <div class="phase-indicator" id="phase-indicator">
-        <div class="phase-step" data-phase="design">Design</div>
-        <div class="phase-step" data-phase="planning">Plan</div>
-        <div class="phase-step" data-phase="executing">Execute</div>
-        <div class="phase-step" data-phase="reviewing">Review</div>
-        <div class="phase-step" data-phase="integrating">Integrate</div>
+      <div class="panel-header">Workflow Phase</div>
+      <div class="phase-track" id="phase-indicator">
+        <div class="phase-step" data-phase="design">
+          <div class="phase-circle">📝</div>
+          <div class="phase-label">Design</div>
+        </div>
+        <div class="phase-step" data-phase="planning">
+          <div class="phase-circle">📋</div>
+          <div class="phase-label">Plan</div>
+        </div>
+        <div class="phase-step" data-phase="executing">
+          <div class="phase-circle">⚡</div>
+          <div class="phase-label">Execute</div>
+        </div>
+        <div class="phase-step" data-phase="reviewing">
+          <div class="phase-circle">👀</div>
+          <div class="phase-label">Review</div>
+        </div>
+        <div class="phase-step" data-phase="integrating">
+          <div class="phase-circle">✨</div>
+          <div class="phase-label">Integrate</div>
+        </div>
       </div>
     </div>
 
     <div class="grid">
       <!-- Task Board -->
       <div class="panel">
-        <div class="panel-header">📋 Task Board</div>
+        <div class="panel-header">Task Board</div>
         <div class="task-board" id="task-board">
-          <div class="empty-state">No tasks yet</div>
+          <div class="empty-state">
+            <div class="empty-state-icon">📋</div>
+            <div>No tasks yet — start a session to begin</div>
+          </div>
         </div>
       </div>
 
       <!-- Stats -->
       <div class="panel">
-        <div class="panel-header">📊 Session Stats</div>
+        <div class="panel-header">Session Stats</div>
         <div class="stats">
           <div class="stat-box">
             <div class="stat-value" id="stat-tasks">0</div>
@@ -339,17 +629,23 @@
 
     <!-- Design Document -->
     <div class="panel" id="design-panel" style="display: none;">
-      <div class="panel-header">📝 Design Document</div>
+      <div class="panel-header">Design Document</div>
       <div class="design-doc" id="design-doc">
-        <div class="empty-state">No design document yet</div>
+        <div class="empty-state">
+          <div class="empty-state-icon">📝</div>
+          <div>No design document yet</div>
+        </div>
       </div>
     </div>
 
     <!-- Activity Feed -->
     <div class="panel">
-      <div class="panel-header">📡 Activity Feed</div>
+      <div class="panel-header">Activity Feed</div>
       <div class="activity-feed" id="activity-feed">
-        <div class="empty-state">Waiting for activity...</div>
+        <div class="empty-state">
+          <div class="empty-state-icon">📡</div>
+          <div>Waiting for activity...</div>
+        </div>
       </div>
     </div>
   </div>
@@ -371,6 +667,19 @@
     // Phase order
     const phaseOrder = ['design', 'planning', 'executing', 'reviewing', 'integrating', 'idle'];
 
+    // Event icons mapping
+    const eventIcons = {
+      phase_changed: '🎯',
+      task_added: '➕',
+      task_updated: '🔄',
+      task_reassigned: '🔁',
+      file_changed: '📄',
+      review_requested: '👀',
+      review_completed: '✅',
+      help_requested: '❓',
+      session_completed: '🎉'
+    };
+
     // Initialize SSE connection
     function connectSSE() {
       eventSource = new EventSource('/events');
@@ -378,8 +687,9 @@
       eventSource.addEventListener('state', (e) => {
         const data = JSON.parse(e.data);
         updateDashboard(data);
-        document.getElementById('connection-status').textContent = 'Connected';
-        document.getElementById('connection-status').style.background = '#238636';
+        const statusEl = document.getElementById('connection-status');
+        statusEl.classList.add('connected');
+        statusEl.querySelector('span').textContent = 'Connected';
       });
 
       eventSource.addEventListener('update', (e) => {
@@ -391,8 +701,9 @@
       });
 
       eventSource.onerror = () => {
-        document.getElementById('connection-status').textContent = 'Disconnected';
-        document.getElementById('connection-status').style.background = '#da3633';
+        const statusEl = document.getElementById('connection-status');
+        statusEl.classList.remove('connected');
+        statusEl.querySelector('span').textContent = 'Disconnected';
       };
     }
 
@@ -429,7 +740,12 @@
       const tasks = taskBoard.tasks || [];
 
       if (tasks.length === 0) {
-        container.innerHTML = '<div class="empty-state">No tasks yet</div>';
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📋</div>
+            <div>No tasks yet — start a session to begin</div>
+          </div>
+        `;
         return;
       }
 
@@ -441,32 +757,36 @@
       if (humanTasks.length > 0) {
         html += '<div class="task-section">';
         html += '<div class="task-section-header">🧑 Human Tasks</div>';
+        html += '<div class="task-list">';
         html += humanTasks.map(renderTask).join('');
-        html += '</div>';
+        html += '</div></div>';
       }
 
       if (aiTasks.length > 0) {
         html += '<div class="task-section">';
         html += '<div class="task-section-header">🤖 AI Tasks</div>';
+        html += '<div class="task-list">';
         html += aiTasks.map(renderTask).join('');
-        html += '</div>';
+        html += '</div></div>';
       }
 
       container.innerHTML = html;
     }
 
     function renderTask(task) {
-      const icon = statusIcons[task.status] || '⬜';
       const files = task.files && task.files.length > 0
-        ? `<div class="task-files">📁 ${task.files.join(', ')}</div>`
+        ? `<div class="task-files">${task.files.map(f => `<span class="file-badge">${escapeHtml(f)}</span>`).join('')}</div>`
         : '';
 
       return `
-        <div class="task-item">
-          <div class="task-status">${icon}</div>
+        <div class="task-item ${task.status}" data-task-id="${task.id}">
+          <div class="task-checkbox"></div>
           <div class="task-content">
             <div class="task-description">${escapeHtml(task.description)}</div>
-            <div class="task-meta">ID: ${task.id} • Status: ${task.status}</div>
+            <div class="task-meta">
+              <span class="task-meta-item">ID: ${task.id}</span>
+              <span class="task-meta-item">Status: ${task.status.replace('_', ' ')}</span>
+            </div>
             ${files}
           </div>
         </div>
@@ -522,17 +842,26 @@
     function renderActivityFeed(eventLog) {
       const container = document.getElementById('activity-feed');
       if (eventLog.length === 0) {
-        container.innerHTML = '<div class="empty-state">Waiting for activity...</div>';
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📡</div>
+            <div>Waiting for activity...</div>
+          </div>
+        `;
         return;
       }
 
       const html = eventLog.slice().reverse().map(item => {
         const time = new Date(item.timestamp).toLocaleTimeString();
         const message = formatEventMessage(item.event);
+        const icon = eventIcons[item.event.type] || '🔔';
         return `
           <div class="activity-item">
-            <div class="activity-time">${time}</div>
-            <div>${message}</div>
+            <div class="activity-icon">${icon}</div>
+            <div class="activity-content">
+              <div class="activity-time">${time}</div>
+              <div class="activity-message">${message}</div>
+            </div>
           </div>
         `;
       }).join('');
@@ -544,11 +873,15 @@
       const container = document.getElementById('activity-feed');
       const time = new Date(logEntry.timestamp).toLocaleTimeString();
       const message = formatEventMessage(logEntry.event);
+      const icon = eventIcons[logEntry.event.type] || '🔔';
 
       const itemHtml = `
         <div class="activity-item">
-          <div class="activity-time">${time}</div>
-          <div>${message}</div>
+          <div class="activity-icon">${icon}</div>
+          <div class="activity-content">
+            <div class="activity-time">${time}</div>
+            <div class="activity-message">${message}</div>
+          </div>
         </div>
       `;
 
@@ -562,17 +895,25 @@
     function formatEventMessage(event) {
       switch (event.type) {
         case 'phase_changed':
-          return `🎯 Phase changed to <strong>${event.phase}</strong>`;
+          return `Phase changed to <strong>${event.phase}</strong>`;
         case 'task_added':
-          return `➕ Task added: ${escapeHtml(event.task.description)}`;
+          return `Task added: ${escapeHtml(event.task.description)}`;
         case 'task_updated':
-          return `🔄 Task ${event.taskId} updated`;
+          return `Task ${event.taskId} updated`;
         case 'task_reassigned':
-          return `🔁 Task ${event.taskId} reassigned from ${event.from} to ${event.to}`;
+          return `Task ${event.taskId} reassigned from ${event.from} to ${event.to}`;
         case 'file_changed':
-          return `📄 File changed: ${escapeHtml(event.filePath)}`;
+          return `File changed: ${escapeHtml(event.filePath)}`;
+        case 'review_requested':
+          return `Review requested for task ${event.taskId}`;
+        case 'review_completed':
+          return `Review ${event.approved ? 'approved' : 'rejected'} for task ${event.taskId}`;
+        case 'help_requested':
+          return `Help requested: ${escapeHtml(event.question)}`;
+        case 'session_completed':
+          return `Session completed! ${event.summary.totalTasks} tasks finished`;
         default:
-          return `🔔 ${event.type}`;
+          return `${event.type.replace('_', ' ')}`;
       }
     }
 
