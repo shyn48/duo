@@ -21538,6 +21538,220 @@ function registerDocumentTools(server) {
   });
 }
 
+// dist/tools/memory.js
+import { readFile as readFile5, writeFile as writeFile4, readdir as readdir2, mkdir as mkdir5 } from "node:fs/promises";
+import { existsSync as existsSync5 } from "node:fs";
+import { join as join6 } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+var execFileAsync = promisify(execFile);
+var DuoMemorySaveSchema = {
+  summary: external_exports.string().describe("Human-readable summary of the session"),
+  keyLearnings: external_exports.array(external_exports.string()).optional().describe("Important insights or decisions from this session"),
+  tags: external_exports.array(external_exports.string()).optional().describe("Tags for categorizing this session (e.g., 'refactoring', 'bugfix')")
+};
+var DuoMemoryRecallSchema = {
+  query: external_exports.string().optional().describe("Optional search query to find specific past sessions"),
+  limit: external_exports.number().optional().default(5).describe("Number of sessions to recall"),
+  tags: external_exports.array(external_exports.string()).optional().describe("Filter by specific tags")
+};
+async function ensureSessionsDir(stateDir) {
+  const sessionsDir = join6(stateDir, "sessions");
+  if (!existsSync5(sessionsDir)) {
+    await mkdir5(sessionsDir, { recursive: true });
+  }
+  return sessionsDir;
+}
+async function saveSessionMetadata(stateDir, session, summary, keyLearnings, tags) {
+  const sessionsDir = await ensureSessionsDir(stateDir);
+  const sessionId = session.startedAt.replace(/[:.]/g, "-");
+  const metadataPath = join6(sessionsDir, `${sessionId}.json`);
+  const completedTasks = session.taskBoard.tasks.filter((t) => t.status === "done").length;
+  const durationMs = Date.now() - new Date(session.startedAt).getTime();
+  const durationMinutes = Math.floor(durationMs / 1e3 / 60);
+  const metadata = {
+    sessionId,
+    startedAt: session.startedAt,
+    endedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    phase: session.phase,
+    summary,
+    keyLearnings,
+    tags,
+    stats: {
+      totalTasks: session.taskBoard.tasks.length,
+      completedTasks,
+      durationMinutes
+    }
+  };
+  await writeFile4(metadataPath, JSON.stringify(metadata, null, 2));
+  return metadataPath;
+}
+async function indexSessionWithQmd(stateDir, sessionId) {
+  try {
+    await execFileAsync("qmd", ["update"]);
+  } catch (error2) {
+    console.warn("QMD indexing warning:", error2.message);
+  }
+}
+async function loadSessionMetadata(stateDir) {
+  const sessionsDir = await ensureSessionsDir(stateDir);
+  if (!existsSync5(sessionsDir)) {
+    return [];
+  }
+  const files = await readdir2(sessionsDir);
+  const jsonFiles = files.filter((f) => f.endsWith(".json"));
+  const sessions = [];
+  for (const file of jsonFiles) {
+    try {
+      const content = await readFile5(join6(sessionsDir, file), "utf-8");
+      sessions.push(JSON.parse(content));
+    } catch (error2) {
+      console.warn(`Failed to parse session metadata: ${file}`);
+    }
+  }
+  sessions.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+  return sessions;
+}
+function filterSessions(sessions, query, tags) {
+  let filtered = sessions;
+  if (tags && tags.length > 0) {
+    filtered = filtered.filter((s) => s.tags?.some((t) => tags.includes(t)));
+  }
+  if (query) {
+    const lowerQuery = query.toLowerCase();
+    filtered = filtered.filter((s) => s.summary.toLowerCase().includes(lowerQuery) || s.keyLearnings?.some((l) => l.toLowerCase().includes(lowerQuery)));
+  }
+  return filtered;
+}
+function formatSessionSummary(session) {
+  const date3 = new Date(session.startedAt).toLocaleString();
+  const tags = session.tags?.length ? ` [${session.tags.join(", ")}]` : "";
+  let output = `\u{1F4C5} ${date3}${tags}
+`;
+  output += `\u{1F4CA} ${session.stats.completedTasks}/${session.stats.totalTasks} tasks completed in ${session.stats.durationMinutes}m
+`;
+  output += `\u{1F4AD} ${session.summary}
+`;
+  if (session.keyLearnings && session.keyLearnings.length > 0) {
+    output += `
+\u{1F9E0} Key Learnings:
+`;
+    output += session.keyLearnings.map((l) => `  \u2022 ${l}`).join("\n");
+  }
+  return output;
+}
+function registerMemoryTools(server) {
+  server.tool("duo_memory_save", "Save current session to memory with a summary and key learnings for future recall.", DuoMemorySaveSchema, async ({ summary, keyLearnings, tags }) => {
+    try {
+      const stateDir = process.env.DUO_STATE_DIR || ".duo";
+      const sessionPath = join6(stateDir, "session.json");
+      if (!existsSync5(sessionPath)) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "No active session to save."
+            }
+          ],
+          isError: true
+        };
+      }
+      const sessionContent = await readFile5(sessionPath, "utf-8");
+      const session = JSON.parse(sessionContent);
+      const metadataPath = await saveSessionMetadata(stateDir, session, summary, keyLearnings, tags);
+      const sessionId = session.startedAt.replace(/[:.]/g, "-");
+      await indexSessionWithQmd(stateDir, sessionId);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `\u2705 Session saved to memory!
+
+${formatSessionSummary({
+              sessionId,
+              startedAt: session.startedAt,
+              endedAt: (/* @__PURE__ */ new Date()).toISOString(),
+              phase: session.phase,
+              summary,
+              keyLearnings,
+              tags,
+              stats: {
+                totalTasks: session.taskBoard.tasks.length,
+                completedTasks: session.taskBoard.tasks.filter((t) => t.status === "done").length,
+                durationMinutes: Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1e3 / 60)
+              }
+            })}
+
+Metadata saved to: ${metadataPath}`
+          }
+        ]
+      };
+    } catch (error2) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to save session: ${error2.message}`
+          }
+        ],
+        isError: true
+      };
+    }
+  });
+  server.tool("duo_memory_recall", "Recall previous Duo sessions to restore context. Filter by query or tags.", DuoMemoryRecallSchema, async ({ query, limit, tags }) => {
+    try {
+      const stateDir = process.env.DUO_STATE_DIR || ".duo";
+      const sessions = await loadSessionMetadata(stateDir);
+      if (sessions.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "No previous sessions found. Start a new session with duo_session_start."
+            }
+          ]
+        };
+      }
+      const filtered = filterSessions(sessions, query, tags);
+      const results = filtered.slice(0, limit);
+      if (results.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `No sessions found matching criteria. Total sessions: ${sessions.length}`
+            }
+          ]
+        };
+      }
+      const formattedResults = results.map((s, idx) => `
+[${idx + 1}]
+${formatSessionSummary(s)}`).join("\n\n---\n");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `\u{1F4DA} Found ${results.length} previous session(s):
+${formattedResults}
+
+Use duo_search to search specific session content.`
+          }
+        ]
+      };
+    } catch (error2) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to recall sessions: ${error2.message}`
+          }
+        ],
+        isError: true
+      };
+    }
+  });
+}
+
 // dist/tools/session.js
 var dashboardInstance = null;
 function openBrowser(url) {
@@ -21764,9 +21978,12 @@ Doc: ${filename}`;
       ]
     };
   });
-  server.tool("duo_session_end", "End the current Duo session and clean up state.", {
+  server.tool("duo_session_end", "End the current Duo session. Auto-archives to .duo/sessions/ for future recall via duo_memory_recall.", {
+    summary: external_exports.string().optional().describe("Optional summary of what was accomplished (auto-generated if not provided)"),
+    keyLearnings: external_exports.array(external_exports.string()).optional().describe("Key insights or lessons from this session"),
+    tags: external_exports.array(external_exports.string()).optional().describe("Tags for categorizing this session"),
     keepState: external_exports.boolean().describe("Keep .duo state files for reference").default(true)
-  }, async ({ keepState }) => {
+  }, async ({ summary, keyLearnings, tags, keepState }) => {
     const state = await getStateInstanceAutoLoad();
     if (!state) {
       return {
@@ -21775,8 +21992,16 @@ Doc: ${filename}`;
         ]
       };
     }
+    const session = state.getSession();
     const tasks = state.getTasks();
     const done = tasks.filter((t) => t.status === "done").length;
+    const autoSummary = summary || `${session.design?.taskDescription || "Duo session"} \u2014 ${done}/${tasks.length} tasks completed`;
+    let archivePath = null;
+    try {
+      archivePath = await saveSessionMetadata(state.getStateDir(), session, autoSummary, keyLearnings, tags);
+    } catch (e) {
+      console.error("Failed to archive session:", e);
+    }
     await state.logChat("system", "event", `Session ended \u2014 ${done}/${tasks.length} tasks done`);
     if (dashboardInstance) {
       await dashboardInstance.stop();
@@ -21794,7 +22019,10 @@ Doc: ${filename}`;
             "\u{1F44B} Duo session ended!",
             "",
             `Tasks completed: ${done}/${tasks.length}`,
-            keepState ? "State files preserved in .duo/" : "State files cleaned up."
+            archivePath ? `\u{1F4C1} Archived for recall: ${archivePath}` : "\u26A0\uFE0F Archive failed",
+            keepState ? "State files preserved in .duo/" : "State files cleaned up.",
+            "",
+            "\u{1F4A1} Future sessions can recall this via duo_memory_recall"
           ].join("\n")
         }
       ]
@@ -22390,11 +22618,11 @@ function registerRecoverTools(server) {
 }
 
 // dist/tools/search.js
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { existsSync as existsSync5 } from "node:fs";
-import { join as join6 } from "node:path";
-var execFileAsync = promisify(execFile);
+import { execFile as execFile2 } from "node:child_process";
+import { promisify as promisify2 } from "node:util";
+import { existsSync as existsSync6 } from "node:fs";
+import { join as join7 } from "node:path";
+var execFileAsync2 = promisify2(execFile2);
 var DuoSearchSchema = {
   query: external_exports.string().describe("Search query for session context"),
   mode: external_exports.enum(["keyword", "semantic"]).default("keyword").describe("Search mode: 'keyword' for fast BM25, 'semantic' for vector search"),
@@ -22413,7 +22641,7 @@ async function executeQmdSearch(query, mode, limit, collection) {
     if (collection) {
       args.push("-c", collection);
     }
-    const { stdout } = await execFileAsync("qmd", args);
+    const { stdout } = await execFileAsync2("qmd", args);
     if (!stdout.trim()) {
       return [];
     }
@@ -22435,18 +22663,18 @@ async function executeQmdSearch(query, mode, limit, collection) {
   }
 }
 async function ensureCollection(stateDir, sessionId) {
-  const chatDir = join6(stateDir, "chat");
-  const docsDir = join6(stateDir, "docs");
-  if (!existsSync5(chatDir) && !existsSync5(docsDir)) {
+  const chatDir = join7(stateDir, "chat");
+  const docsDir = join7(stateDir, "docs");
+  if (!existsSync6(chatDir) && !existsSync6(docsDir)) {
     return;
   }
   try {
-    const { stdout } = await execFileAsync("qmd", ["collection", "list", "--json"]);
+    const { stdout } = await execFileAsync2("qmd", ["collection", "list", "--json"]);
     const collections = JSON.parse(stdout || "[]");
     const collectionName = `duo-session`;
     const exists = collections.some((c) => c.name === collectionName);
-    if (!exists && existsSync5(chatDir)) {
-      await execFileAsync("qmd", [
+    if (!exists && existsSync6(chatDir)) {
+      await execFileAsync2("qmd", [
         "collection",
         "add",
         chatDir,
@@ -22455,13 +22683,13 @@ async function ensureCollection(stateDir, sessionId) {
         "--mask",
         "**/*.jsonl"
       ]);
-      await execFileAsync("qmd", ["update"]);
+      await execFileAsync2("qmd", ["update"]);
     }
-    if (existsSync5(docsDir)) {
+    if (existsSync6(docsDir)) {
       const docsCollectionName = `duo-docs`;
       const docsExists = collections.some((c) => c.name === docsCollectionName);
       if (!docsExists) {
-        await execFileAsync("qmd", [
+        await execFileAsync2("qmd", [
           "collection",
           "add",
           docsDir,
@@ -22470,7 +22698,7 @@ async function ensureCollection(stateDir, sessionId) {
           "--mask",
           "**/*.md"
         ]);
-        await execFileAsync("qmd", ["update"]);
+        await execFileAsync2("qmd", ["update"]);
       }
     }
   } catch (error2) {
@@ -22515,220 +22743,6 @@ ${formattedResults}`
           {
             type: "text",
             text: `Search failed: ${error2.message}`
-          }
-        ],
-        isError: true
-      };
-    }
-  });
-}
-
-// dist/tools/memory.js
-import { readFile as readFile5, writeFile as writeFile4, readdir as readdir2, mkdir as mkdir5 } from "node:fs/promises";
-import { existsSync as existsSync6 } from "node:fs";
-import { join as join7 } from "node:path";
-import { execFile as execFile2 } from "node:child_process";
-import { promisify as promisify2 } from "node:util";
-var execFileAsync2 = promisify2(execFile2);
-var DuoMemorySaveSchema = {
-  summary: external_exports.string().describe("Human-readable summary of the session"),
-  keyLearnings: external_exports.array(external_exports.string()).optional().describe("Important insights or decisions from this session"),
-  tags: external_exports.array(external_exports.string()).optional().describe("Tags for categorizing this session (e.g., 'refactoring', 'bugfix')")
-};
-var DuoMemoryRecallSchema = {
-  query: external_exports.string().optional().describe("Optional search query to find specific past sessions"),
-  limit: external_exports.number().optional().default(5).describe("Number of sessions to recall"),
-  tags: external_exports.array(external_exports.string()).optional().describe("Filter by specific tags")
-};
-async function ensureSessionsDir(stateDir) {
-  const sessionsDir = join7(stateDir, "sessions");
-  if (!existsSync6(sessionsDir)) {
-    await mkdir5(sessionsDir, { recursive: true });
-  }
-  return sessionsDir;
-}
-async function saveSessionMetadata(stateDir, session, summary, keyLearnings, tags) {
-  const sessionsDir = await ensureSessionsDir(stateDir);
-  const sessionId = session.startedAt.replace(/[:.]/g, "-");
-  const metadataPath = join7(sessionsDir, `${sessionId}.json`);
-  const completedTasks = session.taskBoard.tasks.filter((t) => t.status === "done").length;
-  const durationMs = Date.now() - new Date(session.startedAt).getTime();
-  const durationMinutes = Math.floor(durationMs / 1e3 / 60);
-  const metadata = {
-    sessionId,
-    startedAt: session.startedAt,
-    endedAt: (/* @__PURE__ */ new Date()).toISOString(),
-    phase: session.phase,
-    summary,
-    keyLearnings,
-    tags,
-    stats: {
-      totalTasks: session.taskBoard.tasks.length,
-      completedTasks,
-      durationMinutes
-    }
-  };
-  await writeFile4(metadataPath, JSON.stringify(metadata, null, 2));
-  return metadataPath;
-}
-async function indexSessionWithQmd(stateDir, sessionId) {
-  try {
-    await execFileAsync2("qmd", ["update"]);
-  } catch (error2) {
-    console.warn("QMD indexing warning:", error2.message);
-  }
-}
-async function loadSessionMetadata(stateDir) {
-  const sessionsDir = await ensureSessionsDir(stateDir);
-  if (!existsSync6(sessionsDir)) {
-    return [];
-  }
-  const files = await readdir2(sessionsDir);
-  const jsonFiles = files.filter((f) => f.endsWith(".json"));
-  const sessions = [];
-  for (const file of jsonFiles) {
-    try {
-      const content = await readFile5(join7(sessionsDir, file), "utf-8");
-      sessions.push(JSON.parse(content));
-    } catch (error2) {
-      console.warn(`Failed to parse session metadata: ${file}`);
-    }
-  }
-  sessions.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
-  return sessions;
-}
-function filterSessions(sessions, query, tags) {
-  let filtered = sessions;
-  if (tags && tags.length > 0) {
-    filtered = filtered.filter((s) => s.tags?.some((t) => tags.includes(t)));
-  }
-  if (query) {
-    const lowerQuery = query.toLowerCase();
-    filtered = filtered.filter((s) => s.summary.toLowerCase().includes(lowerQuery) || s.keyLearnings?.some((l) => l.toLowerCase().includes(lowerQuery)));
-  }
-  return filtered;
-}
-function formatSessionSummary(session) {
-  const date3 = new Date(session.startedAt).toLocaleString();
-  const tags = session.tags?.length ? ` [${session.tags.join(", ")}]` : "";
-  let output = `\u{1F4C5} ${date3}${tags}
-`;
-  output += `\u{1F4CA} ${session.stats.completedTasks}/${session.stats.totalTasks} tasks completed in ${session.stats.durationMinutes}m
-`;
-  output += `\u{1F4AD} ${session.summary}
-`;
-  if (session.keyLearnings && session.keyLearnings.length > 0) {
-    output += `
-\u{1F9E0} Key Learnings:
-`;
-    output += session.keyLearnings.map((l) => `  \u2022 ${l}`).join("\n");
-  }
-  return output;
-}
-function registerMemoryTools(server) {
-  server.tool("duo_memory_save", "Save current session to memory with a summary and key learnings for future recall.", DuoMemorySaveSchema, async ({ summary, keyLearnings, tags }) => {
-    try {
-      const stateDir = process.env.DUO_STATE_DIR || ".duo";
-      const sessionPath = join7(stateDir, "session.json");
-      if (!existsSync6(sessionPath)) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "No active session to save."
-            }
-          ],
-          isError: true
-        };
-      }
-      const sessionContent = await readFile5(sessionPath, "utf-8");
-      const session = JSON.parse(sessionContent);
-      const metadataPath = await saveSessionMetadata(stateDir, session, summary, keyLearnings, tags);
-      const sessionId = session.startedAt.replace(/[:.]/g, "-");
-      await indexSessionWithQmd(stateDir, sessionId);
-      return {
-        content: [
-          {
-            type: "text",
-            text: `\u2705 Session saved to memory!
-
-${formatSessionSummary({
-              sessionId,
-              startedAt: session.startedAt,
-              endedAt: (/* @__PURE__ */ new Date()).toISOString(),
-              phase: session.phase,
-              summary,
-              keyLearnings,
-              tags,
-              stats: {
-                totalTasks: session.taskBoard.tasks.length,
-                completedTasks: session.taskBoard.tasks.filter((t) => t.status === "done").length,
-                durationMinutes: Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1e3 / 60)
-              }
-            })}
-
-Metadata saved to: ${metadataPath}`
-          }
-        ]
-      };
-    } catch (error2) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Failed to save session: ${error2.message}`
-          }
-        ],
-        isError: true
-      };
-    }
-  });
-  server.tool("duo_memory_recall", "Recall previous Duo sessions to restore context. Filter by query or tags.", DuoMemoryRecallSchema, async ({ query, limit, tags }) => {
-    try {
-      const stateDir = process.env.DUO_STATE_DIR || ".duo";
-      const sessions = await loadSessionMetadata(stateDir);
-      if (sessions.length === 0) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "No previous sessions found. Start a new session with duo_session_start."
-            }
-          ]
-        };
-      }
-      const filtered = filterSessions(sessions, query, tags);
-      const results = filtered.slice(0, limit);
-      if (results.length === 0) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `No sessions found matching criteria. Total sessions: ${sessions.length}`
-            }
-          ]
-        };
-      }
-      const formattedResults = results.map((s, idx) => `
-[${idx + 1}]
-${formatSessionSummary(s)}`).join("\n\n---\n");
-      return {
-        content: [
-          {
-            type: "text",
-            text: `\u{1F4DA} Found ${results.length} previous session(s):
-${formattedResults}
-
-Use duo_search to search specific session content.`
-          }
-        ]
-      };
-    } catch (error2) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Failed to recall sessions: ${error2.message}`
           }
         ],
         isError: true

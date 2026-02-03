@@ -66,7 +66,7 @@ async function ensureSessionsDir(stateDir: string): Promise<string> {
 /**
  * Save session metadata with summary and learnings.
  */
-async function saveSessionMetadata(
+export async function saveSessionMetadata(
   stateDir: string,
   session: DuoSession,
   summary: string,

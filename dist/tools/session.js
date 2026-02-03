@@ -9,6 +9,7 @@ import { exec } from "node:child_process";
 import { ensureDocsDir, saveDocument } from "./document.js";
 import { ensureMemoryDir } from "../memory/checkpoint.js";
 import { ensureChatDir } from "../memory/chat.js";
+import { saveSessionMetadata } from "./memory.js";
 let dashboardInstance = null;
 function openBrowser(url) {
     const platform = process.platform;
@@ -278,12 +279,25 @@ export function registerSessionTools(server) {
         };
     });
     // ── End session ──
-    server.tool("duo_session_end", "End the current Duo session and clean up state.", {
+    // ── End session ──
+    server.tool("duo_session_end", "End the current Duo session. Auto-archives to .duo/sessions/ for future recall via duo_memory_recall.", {
+        summary: z
+            .string()
+            .optional()
+            .describe("Optional summary of what was accomplished (auto-generated if not provided)"),
+        keyLearnings: z
+            .array(z.string())
+            .optional()
+            .describe("Key insights or lessons from this session"),
+        tags: z
+            .array(z.string())
+            .optional()
+            .describe("Tags for categorizing this session"),
         keepState: z
             .boolean()
             .describe("Keep .duo state files for reference")
             .default(true),
-    }, async ({ keepState }) => {
+    }, async ({ summary, keyLearnings, tags, keepState }) => {
         const state = await getStateInstanceAutoLoad();
         if (!state) {
             return {
@@ -292,8 +306,20 @@ export function registerSessionTools(server) {
                 ],
             };
         }
+        const session = state.getSession();
         const tasks = state.getTasks();
         const done = tasks.filter((t) => t.status === "done").length;
+        // Auto-generate summary if not provided
+        const autoSummary = summary ||
+            `${session.design?.taskDescription || "Duo session"} — ${done}/${tasks.length} tasks completed`;
+        // Auto-archive session to .duo/sessions/ for future recall
+        let archivePath = null;
+        try {
+            archivePath = await saveSessionMetadata(state.getStateDir(), session, autoSummary, keyLearnings, tags);
+        }
+        catch (e) {
+            console.error("Failed to archive session:", e);
+        }
         // Log session end
         await state.logChat("system", "event", `Session ended — ${done}/${tasks.length} tasks done`);
         // Stop dashboard
@@ -313,9 +339,14 @@ export function registerSessionTools(server) {
                         "👋 Duo session ended!",
                         "",
                         `Tasks completed: ${done}/${tasks.length}`,
+                        archivePath
+                            ? `📁 Archived for recall: ${archivePath}`
+                            : "⚠️ Archive failed",
                         keepState
                             ? "State files preserved in .duo/"
                             : "State files cleaned up.",
+                        "",
+                        "💡 Future sessions can recall this via duo_memory_recall",
                     ].join("\n"),
                 },
             ],

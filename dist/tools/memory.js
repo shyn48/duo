@@ -43,7 +43,7 @@ async function ensureSessionsDir(stateDir) {
 /**
  * Save session metadata with summary and learnings.
  */
-async function saveSessionMetadata(stateDir, session, summary, keyLearnings, tags) {
+export async function saveSessionMetadata(stateDir, session, summary, keyLearnings, tags) {
     const sessionsDir = await ensureSessionsDir(stateDir);
     // Generate session ID from startedAt timestamp
     const sessionId = session.startedAt.replace(/[:.]/g, "-");

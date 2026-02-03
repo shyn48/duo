@@ -159,25 +159,35 @@ Cross-review is critical. This is where code quality and understanding happen.
 
 ### Session Recovery & Memory (CRITICAL)
 
-**Recovery:**
-- `duo_recover_session` — **MANDATORY after context loss.** Auto-detects the latest checkpoint from `.duo/memory/`, restores phase, tasks, design, and subagent state. Call this FIRST when you detect context loss — before asking the human anything.
+**On Session Start:**
+1. Call `duo_memory_recall` to check for relevant past sessions on this task/feature
+2. If prior work exists, summarize it for context before starting design
 
-**Search:**
-- `duo_search` — Search session context and history. Supports `keyword` (fast BM25) or `semantic` (vector search via QMD) modes. Use to find specific discussions, decisions, or code references from the session.
+**After Context Compaction (MANDATORY):**
+1. **Detect it:** Summary at top of context, missing conversation history, uncertain about state
+2. **Immediately call `duo_recover_session`** — do NOT guess, do NOT ask the human
+3. If you need more context about discussions, use `duo_search query="topic"`
+4. Then summarize what you recovered and continue
 
-**Persistent Memory:**
-- `duo_memory_save` — Save session metadata with summary and key learnings at session end. Stores to `.duo/sessions/` for future recall.
-- `duo_memory_recall` — Recall past sessions with optional query, limit, and tag filters. Use at session start to check for relevant prior work.
+**During Session:**
+- Use `duo_search` when you need to find specific decisions, discussions, or code references
+- Checkpoints are auto-saved on task completion and phase transitions
+
+**On Session End:**
+- `duo_session_end` auto-archives to `.duo/sessions/` for future recall
+- Optionally provide summary, keyLearnings, and tags for better searchability
+
+**Tools:**
+- `duo_recover_session` — **MANDATORY after context loss.** Restores phase, tasks, design from latest checkpoint.
+- `duo_search` — Search chat history and context. Use `mode="keyword"` (fast) or `mode="semantic"` (deep).
+- `duo_memory_recall` — Recall past sessions. **Use at session start** to find relevant prior work.
+- `duo_memory_save` — Manually save session metadata (auto-called by `duo_session_end`).
 
 **Automatic Features:**
-- Checkpoints saved automatically on every phase transition
+- Checkpoints saved on task completion + phase transitions
 - Chat history logged to `.duo/chat/session-{startedAt}.jsonl`
-- All task updates, phase changes, reviews, and subagent events are recorded
+- Sessions auto-archived on `duo_session_end`
 
-## Message Threading
-
-Tool responses include `_meta: { from, timestamp }` to identify message sources:
-- `"ai"` — Main agent actions
 - `"human"` — Human-initiated actions
 - `"subagent"` — Sub-agent updates
 - `"system"` — System events
