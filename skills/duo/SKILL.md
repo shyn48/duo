@@ -5,6 +5,26 @@ description: Collaborative pair programming workflow that splits coding tasks be
 
 # Duo — Collaborative Coding Partner
 
+## ⚠️ CRITICAL: Context Loss Recovery (MANDATORY)
+
+**Before doing ANYTHING else after detecting context loss, you MUST:**
+
+1. **Detect context loss** — Signs include:
+   - Summary at the top of your context (compaction happened)
+   - Missing conversation history
+   - Uncertain about current task/phase
+   - Human says "recover", "context lost", or "compacted"
+
+2. **Immediately call `duo_recover_session`** — Do NOT continue working, do NOT guess, do NOT ask the human what you were doing. Just call the tool.
+
+3. **Review the restored state** — The tool returns phase, tasks, design, and subagent state. Summarize what you recovered.
+
+4. **Only then continue** — Resume from where you left off.
+
+**This is not optional.** Context recovery is the first action after any context loss event.
+
+---
+
 ## Goals
 
 1. **Code quality** — Cross-review catches more bugs than single-reviewer workflows
@@ -137,10 +157,22 @@ Cross-review is critical. This is where code quality and understanding happen.
 ### Documentation
 - `duo_document_save` — Save a document to `.duo/docs/` with auto-generated filename
 
-### Session Recovery & Memory
-- `duo_recover_session` — Recover from context loss. Auto-detects the latest checkpoint from `.duo/memory/`, restores phase, tasks, design, and subagent state. Call this when you detect context loss or the human says "recover".
-- Checkpoints are saved automatically on every phase transition. The agent can also call `state.checkpoint(context)` manually before risky operations.
-- Chat history is logged automatically to `.duo/chat/session-{startedAt}.jsonl` — all task updates, phase changes, reviews, and subagent events are recorded.
+### Session Recovery & Memory (CRITICAL)
+
+**Recovery:**
+- `duo_recover_session` — **MANDATORY after context loss.** Auto-detects the latest checkpoint from `.duo/memory/`, restores phase, tasks, design, and subagent state. Call this FIRST when you detect context loss — before asking the human anything.
+
+**Search:**
+- `duo_search` — Search session context and history. Supports `keyword` (fast BM25) or `semantic` (vector search via QMD) modes. Use to find specific discussions, decisions, or code references from the session.
+
+**Persistent Memory:**
+- `duo_memory_save` — Save session metadata with summary and key learnings at session end. Stores to `.duo/sessions/` for future recall.
+- `duo_memory_recall` — Recall past sessions with optional query, limit, and tag filters. Use at session start to check for relevant prior work.
+
+**Automatic Features:**
+- Checkpoints saved automatically on every phase transition
+- Chat history logged to `.duo/chat/session-{startedAt}.jsonl`
+- All task updates, phase changes, reviews, and subagent events are recorded
 
 ## Message Threading
 
@@ -152,6 +184,7 @@ Tool responses include `_meta: { from, timestamp }` to identify message sources:
 
 ## Anti-Patterns (avoid these)
 
+- ❌ **Continuing after context loss without calling `duo_recover_session`** — This is the #1 mistake
 - ❌ Rubber-stamping human's design without challenge
 - ❌ Assigning human only easy/trivial tasks
 - ❌ Jumping to code when human says "stuck" (hints first!)
