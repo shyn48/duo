@@ -481,18 +481,18 @@ var init_parseUtil = __esm({
         if (this.value !== "aborted")
           this.value = "aborted";
       }
-      static mergeArray(status, results) {
+      static mergeArray(status2, results) {
         const arrayValue = [];
         for (const s of results) {
           if (s.status === "aborted")
             return INVALID;
           if (s.status === "dirty")
-            status.dirty();
+            status2.dirty();
           arrayValue.push(s.value);
         }
-        return { status: status.value, value: arrayValue };
+        return { status: status2.value, value: arrayValue };
       }
-      static async mergeObjectAsync(status, pairs) {
+      static async mergeObjectAsync(status2, pairs) {
         const syncPairs = [];
         for (const pair of pairs) {
           const key = await pair.key;
@@ -502,9 +502,9 @@ var init_parseUtil = __esm({
             value
           });
         }
-        return _ParseStatus.mergeObjectSync(status, syncPairs);
+        return _ParseStatus.mergeObjectSync(status2, syncPairs);
       }
-      static mergeObjectSync(status, pairs) {
+      static mergeObjectSync(status2, pairs) {
         const finalObject = {};
         for (const pair of pairs) {
           const { key, value } = pair;
@@ -513,14 +513,14 @@ var init_parseUtil = __esm({
           if (value.status === "aborted")
             return INVALID;
           if (key.status === "dirty")
-            status.dirty();
+            status2.dirty();
           if (value.status === "dirty")
-            status.dirty();
+            status2.dirty();
           if (key.value !== "__proto__" && (typeof value.value !== "undefined" || pair.alwaysSet)) {
             finalObject[key.value] = value.value;
           }
         }
-        return { status: status.value, value: finalObject };
+        return { status: status2.value, value: finalObject };
       }
     };
     INVALID = Object.freeze({
@@ -1105,7 +1105,7 @@ var init_types = __esm({
           });
           return INVALID;
         }
-        const status = new ParseStatus();
+        const status2 = new ParseStatus();
         let ctx = void 0;
         for (const check2 of this._def.checks) {
           if (check2.kind === "min") {
@@ -1119,7 +1119,7 @@ var init_types = __esm({
                 exact: false,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "max") {
             if (input.data.length > check2.value) {
@@ -1132,7 +1132,7 @@ var init_types = __esm({
                 exact: false,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "length") {
             const tooBig = input.data.length > check2.value;
@@ -1158,7 +1158,7 @@ var init_types = __esm({
                   message: check2.message
                 });
               }
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "email") {
             if (!emailRegex.test(input.data)) {
@@ -1168,7 +1168,7 @@ var init_types = __esm({
                 code: ZodIssueCode.invalid_string,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "emoji") {
             if (!emojiRegex) {
@@ -1181,7 +1181,7 @@ var init_types = __esm({
                 code: ZodIssueCode.invalid_string,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "uuid") {
             if (!uuidRegex.test(input.data)) {
@@ -1191,7 +1191,7 @@ var init_types = __esm({
                 code: ZodIssueCode.invalid_string,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "nanoid") {
             if (!nanoidRegex.test(input.data)) {
@@ -1201,7 +1201,7 @@ var init_types = __esm({
                 code: ZodIssueCode.invalid_string,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "cuid") {
             if (!cuidRegex.test(input.data)) {
@@ -1211,7 +1211,7 @@ var init_types = __esm({
                 code: ZodIssueCode.invalid_string,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "cuid2") {
             if (!cuid2Regex.test(input.data)) {
@@ -1221,7 +1221,7 @@ var init_types = __esm({
                 code: ZodIssueCode.invalid_string,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "ulid") {
             if (!ulidRegex.test(input.data)) {
@@ -1231,7 +1231,7 @@ var init_types = __esm({
                 code: ZodIssueCode.invalid_string,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "url") {
             try {
@@ -1243,7 +1243,7 @@ var init_types = __esm({
                 code: ZodIssueCode.invalid_string,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "regex") {
             check2.regex.lastIndex = 0;
@@ -1255,7 +1255,7 @@ var init_types = __esm({
                 code: ZodIssueCode.invalid_string,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "trim") {
             input.data = input.data.trim();
@@ -1267,7 +1267,7 @@ var init_types = __esm({
                 validation: { includes: check2.value, position: check2.position },
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "toLowerCase") {
             input.data = input.data.toLowerCase();
@@ -1281,7 +1281,7 @@ var init_types = __esm({
                 validation: { startsWith: check2.value },
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "endsWith") {
             if (!input.data.endsWith(check2.value)) {
@@ -1291,7 +1291,7 @@ var init_types = __esm({
                 validation: { endsWith: check2.value },
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "datetime") {
             const regex = datetimeRegex(check2);
@@ -1302,7 +1302,7 @@ var init_types = __esm({
                 validation: "datetime",
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "date") {
             const regex = dateRegex;
@@ -1313,7 +1313,7 @@ var init_types = __esm({
                 validation: "date",
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "time") {
             const regex = timeRegex(check2);
@@ -1324,7 +1324,7 @@ var init_types = __esm({
                 validation: "time",
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "duration") {
             if (!durationRegex.test(input.data)) {
@@ -1334,7 +1334,7 @@ var init_types = __esm({
                 code: ZodIssueCode.invalid_string,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "ip") {
             if (!isValidIP(input.data, check2.version)) {
@@ -1344,7 +1344,7 @@ var init_types = __esm({
                 code: ZodIssueCode.invalid_string,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "jwt") {
             if (!isValidJWT(input.data, check2.alg)) {
@@ -1354,7 +1354,7 @@ var init_types = __esm({
                 code: ZodIssueCode.invalid_string,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "cidr") {
             if (!isValidCidr(input.data, check2.version)) {
@@ -1364,7 +1364,7 @@ var init_types = __esm({
                 code: ZodIssueCode.invalid_string,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "base64") {
             if (!base64Regex.test(input.data)) {
@@ -1374,7 +1374,7 @@ var init_types = __esm({
                 code: ZodIssueCode.invalid_string,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "base64url") {
             if (!base64urlRegex.test(input.data)) {
@@ -1384,13 +1384,13 @@ var init_types = __esm({
                 code: ZodIssueCode.invalid_string,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else {
             util.assertNever(check2);
           }
         }
-        return { status: status.value, value: input.data };
+        return { status: status2.value, value: input.data };
       }
       _regex(regex, validation, message) {
         return this.refinement((data) => regex.test(data), {
@@ -1658,7 +1658,7 @@ var init_types = __esm({
           return INVALID;
         }
         let ctx = void 0;
-        const status = new ParseStatus();
+        const status2 = new ParseStatus();
         for (const check2 of this._def.checks) {
           if (check2.kind === "int") {
             if (!util.isInteger(input.data)) {
@@ -1669,7 +1669,7 @@ var init_types = __esm({
                 received: "float",
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "min") {
             const tooSmall = check2.inclusive ? input.data < check2.value : input.data <= check2.value;
@@ -1683,7 +1683,7 @@ var init_types = __esm({
                 exact: false,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "max") {
             const tooBig = check2.inclusive ? input.data > check2.value : input.data >= check2.value;
@@ -1697,7 +1697,7 @@ var init_types = __esm({
                 exact: false,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "multipleOf") {
             if (floatSafeRemainder(input.data, check2.value) !== 0) {
@@ -1707,7 +1707,7 @@ var init_types = __esm({
                 multipleOf: check2.value,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "finite") {
             if (!Number.isFinite(input.data)) {
@@ -1716,13 +1716,13 @@ var init_types = __esm({
                 code: ZodIssueCode.not_finite,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else {
             util.assertNever(check2);
           }
         }
-        return { status: status.value, value: input.data };
+        return { status: status2.value, value: input.data };
       }
       gte(value, message) {
         return this.setLimit("min", value, true, errorUtil.toString(message));
@@ -1887,7 +1887,7 @@ var init_types = __esm({
           return this._getInvalidInput(input);
         }
         let ctx = void 0;
-        const status = new ParseStatus();
+        const status2 = new ParseStatus();
         for (const check2 of this._def.checks) {
           if (check2.kind === "min") {
             const tooSmall = check2.inclusive ? input.data < check2.value : input.data <= check2.value;
@@ -1900,7 +1900,7 @@ var init_types = __esm({
                 inclusive: check2.inclusive,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "max") {
             const tooBig = check2.inclusive ? input.data > check2.value : input.data >= check2.value;
@@ -1913,7 +1913,7 @@ var init_types = __esm({
                 inclusive: check2.inclusive,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "multipleOf") {
             if (input.data % check2.value !== BigInt(0)) {
@@ -1923,13 +1923,13 @@ var init_types = __esm({
                 multipleOf: check2.value,
                 message: check2.message
               });
-              status.dirty();
+              status2.dirty();
             }
           } else {
             util.assertNever(check2);
           }
         }
-        return { status: status.value, value: input.data };
+        return { status: status2.value, value: input.data };
       }
       _getInvalidInput(input) {
         const ctx = this._getOrReturnCtx(input);
@@ -2087,7 +2087,7 @@ var init_types = __esm({
           });
           return INVALID;
         }
-        const status = new ParseStatus();
+        const status2 = new ParseStatus();
         let ctx = void 0;
         for (const check2 of this._def.checks) {
           if (check2.kind === "min") {
@@ -2101,7 +2101,7 @@ var init_types = __esm({
                 minimum: check2.value,
                 type: "date"
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (check2.kind === "max") {
             if (input.data.getTime() > check2.value) {
@@ -2114,14 +2114,14 @@ var init_types = __esm({
                 maximum: check2.value,
                 type: "date"
               });
-              status.dirty();
+              status2.dirty();
             }
           } else {
             util.assertNever(check2);
           }
         }
         return {
-          status: status.value,
+          status: status2.value,
           value: new Date(input.data.getTime())
         };
       }
@@ -2307,7 +2307,7 @@ var init_types = __esm({
     };
     ZodArray = class _ZodArray extends ZodType {
       _parse(input) {
-        const { ctx, status } = this._processInputParams(input);
+        const { ctx, status: status2 } = this._processInputParams(input);
         const def = this._def;
         if (ctx.parsedType !== ZodParsedType.array) {
           addIssueToContext(ctx, {
@@ -2330,7 +2330,7 @@ var init_types = __esm({
               exact: true,
               message: def.exactLength.message
             });
-            status.dirty();
+            status2.dirty();
           }
         }
         if (def.minLength !== null) {
@@ -2343,7 +2343,7 @@ var init_types = __esm({
               exact: false,
               message: def.minLength.message
             });
-            status.dirty();
+            status2.dirty();
           }
         }
         if (def.maxLength !== null) {
@@ -2356,20 +2356,20 @@ var init_types = __esm({
               exact: false,
               message: def.maxLength.message
             });
-            status.dirty();
+            status2.dirty();
           }
         }
         if (ctx.common.async) {
           return Promise.all([...ctx.data].map((item, i) => {
             return def.type._parseAsync(new ParseInputLazyPath(ctx, item, ctx.path, i));
           })).then((result2) => {
-            return ParseStatus.mergeArray(status, result2);
+            return ParseStatus.mergeArray(status2, result2);
           });
         }
         const result = [...ctx.data].map((item, i) => {
           return def.type._parseSync(new ParseInputLazyPath(ctx, item, ctx.path, i));
         });
-        return ParseStatus.mergeArray(status, result);
+        return ParseStatus.mergeArray(status2, result);
       }
       get element() {
         return this._def.type;
@@ -2432,7 +2432,7 @@ var init_types = __esm({
           });
           return INVALID;
         }
-        const { status, ctx } = this._processInputParams(input);
+        const { status: status2, ctx } = this._processInputParams(input);
         const { shape, keys: shapeKeys } = this._getCached();
         const extraKeys = [];
         if (!(this._def.catchall instanceof ZodNever && this._def.unknownKeys === "strip")) {
@@ -2467,7 +2467,7 @@ var init_types = __esm({
                 code: ZodIssueCode.unrecognized_keys,
                 keys: extraKeys
               });
-              status.dirty();
+              status2.dirty();
             }
           } else if (unknownKeys === "strip") {
           } else {
@@ -2501,10 +2501,10 @@ var init_types = __esm({
             }
             return syncPairs;
           }).then((syncPairs) => {
-            return ParseStatus.mergeObjectSync(status, syncPairs);
+            return ParseStatus.mergeObjectSync(status2, syncPairs);
           });
         } else {
-          return ParseStatus.mergeObjectSync(status, pairs);
+          return ParseStatus.mergeObjectSync(status2, pairs);
         }
       }
       get shape() {
@@ -2944,7 +2944,7 @@ var init_types = __esm({
     };
     ZodIntersection = class extends ZodType {
       _parse(input) {
-        const { status, ctx } = this._processInputParams(input);
+        const { status: status2, ctx } = this._processInputParams(input);
         const handleParsed = (parsedLeft, parsedRight) => {
           if (isAborted(parsedLeft) || isAborted(parsedRight)) {
             return INVALID;
@@ -2957,9 +2957,9 @@ var init_types = __esm({
             return INVALID;
           }
           if (isDirty(parsedLeft) || isDirty(parsedRight)) {
-            status.dirty();
+            status2.dirty();
           }
-          return { status: status.value, value: merged.data };
+          return { status: status2.value, value: merged.data };
         };
         if (ctx.common.async) {
           return Promise.all([
@@ -2997,7 +2997,7 @@ var init_types = __esm({
     };
     ZodTuple = class _ZodTuple extends ZodType {
       _parse(input) {
-        const { status, ctx } = this._processInputParams(input);
+        const { status: status2, ctx } = this._processInputParams(input);
         if (ctx.parsedType !== ZodParsedType.array) {
           addIssueToContext(ctx, {
             code: ZodIssueCode.invalid_type,
@@ -3025,7 +3025,7 @@ var init_types = __esm({
             exact: false,
             type: "array"
           });
-          status.dirty();
+          status2.dirty();
         }
         const items = [...ctx.data].map((item, itemIndex) => {
           const schema = this._def.items[itemIndex] || this._def.rest;
@@ -3035,10 +3035,10 @@ var init_types = __esm({
         }).filter((x) => !!x);
         if (ctx.common.async) {
           return Promise.all(items).then((results) => {
-            return ParseStatus.mergeArray(status, results);
+            return ParseStatus.mergeArray(status2, results);
           });
         } else {
-          return ParseStatus.mergeArray(status, items);
+          return ParseStatus.mergeArray(status2, items);
         }
       }
       get items() {
@@ -3070,7 +3070,7 @@ var init_types = __esm({
         return this._def.valueType;
       }
       _parse(input) {
-        const { status, ctx } = this._processInputParams(input);
+        const { status: status2, ctx } = this._processInputParams(input);
         if (ctx.parsedType !== ZodParsedType.object) {
           addIssueToContext(ctx, {
             code: ZodIssueCode.invalid_type,
@@ -3090,9 +3090,9 @@ var init_types = __esm({
           });
         }
         if (ctx.common.async) {
-          return ParseStatus.mergeObjectAsync(status, pairs);
+          return ParseStatus.mergeObjectAsync(status2, pairs);
         } else {
-          return ParseStatus.mergeObjectSync(status, pairs);
+          return ParseStatus.mergeObjectSync(status2, pairs);
         }
       }
       get element() {
@@ -3123,7 +3123,7 @@ var init_types = __esm({
         return this._def.valueType;
       }
       _parse(input) {
-        const { status, ctx } = this._processInputParams(input);
+        const { status: status2, ctx } = this._processInputParams(input);
         if (ctx.parsedType !== ZodParsedType.map) {
           addIssueToContext(ctx, {
             code: ZodIssueCode.invalid_type,
@@ -3150,11 +3150,11 @@ var init_types = __esm({
                 return INVALID;
               }
               if (key.status === "dirty" || value.status === "dirty") {
-                status.dirty();
+                status2.dirty();
               }
               finalMap.set(key.value, value.value);
             }
-            return { status: status.value, value: finalMap };
+            return { status: status2.value, value: finalMap };
           });
         } else {
           const finalMap = /* @__PURE__ */ new Map();
@@ -3165,11 +3165,11 @@ var init_types = __esm({
               return INVALID;
             }
             if (key.status === "dirty" || value.status === "dirty") {
-              status.dirty();
+              status2.dirty();
             }
             finalMap.set(key.value, value.value);
           }
-          return { status: status.value, value: finalMap };
+          return { status: status2.value, value: finalMap };
         }
       }
     };
@@ -3183,7 +3183,7 @@ var init_types = __esm({
     };
     ZodSet = class _ZodSet extends ZodType {
       _parse(input) {
-        const { status, ctx } = this._processInputParams(input);
+        const { status: status2, ctx } = this._processInputParams(input);
         if (ctx.parsedType !== ZodParsedType.set) {
           addIssueToContext(ctx, {
             code: ZodIssueCode.invalid_type,
@@ -3203,7 +3203,7 @@ var init_types = __esm({
               exact: false,
               message: def.minSize.message
             });
-            status.dirty();
+            status2.dirty();
           }
         }
         if (def.maxSize !== null) {
@@ -3216,7 +3216,7 @@ var init_types = __esm({
               exact: false,
               message: def.maxSize.message
             });
-            status.dirty();
+            status2.dirty();
           }
         }
         const valueType = this._def.valueType;
@@ -3226,10 +3226,10 @@ var init_types = __esm({
             if (element.status === "aborted")
               return INVALID;
             if (element.status === "dirty")
-              status.dirty();
+              status2.dirty();
             parsedSet.add(element.value);
           }
-          return { status: status.value, value: parsedSet };
+          return { status: status2.value, value: parsedSet };
         }
         const elements = [...ctx.data.values()].map((item, i) => valueType._parse(new ParseInputLazyPath(ctx, item, ctx.path, i)));
         if (ctx.common.async) {
@@ -3553,15 +3553,15 @@ var init_types = __esm({
         return this._def.schema._def.typeName === ZodFirstPartyTypeKind.ZodEffects ? this._def.schema.sourceType() : this._def.schema;
       }
       _parse(input) {
-        const { status, ctx } = this._processInputParams(input);
+        const { status: status2, ctx } = this._processInputParams(input);
         const effect = this._def.effect || null;
         const checkCtx = {
           addIssue: (arg) => {
             addIssueToContext(ctx, arg);
             if (arg.fatal) {
-              status.abort();
+              status2.abort();
             } else {
-              status.dirty();
+              status2.dirty();
             }
           },
           get path() {
@@ -3573,7 +3573,7 @@ var init_types = __esm({
           const processed = effect.transform(ctx.data, checkCtx);
           if (ctx.common.async) {
             return Promise.resolve(processed).then(async (processed2) => {
-              if (status.value === "aborted")
+              if (status2.value === "aborted")
                 return INVALID;
               const result = await this._def.schema._parseAsync({
                 data: processed2,
@@ -3584,12 +3584,12 @@ var init_types = __esm({
                 return INVALID;
               if (result.status === "dirty")
                 return DIRTY(result.value);
-              if (status.value === "dirty")
+              if (status2.value === "dirty")
                 return DIRTY(result.value);
               return result;
             });
           } else {
-            if (status.value === "aborted")
+            if (status2.value === "aborted")
               return INVALID;
             const result = this._def.schema._parseSync({
               data: processed,
@@ -3600,7 +3600,7 @@ var init_types = __esm({
               return INVALID;
             if (result.status === "dirty")
               return DIRTY(result.value);
-            if (status.value === "dirty")
+            if (status2.value === "dirty")
               return DIRTY(result.value);
             return result;
           }
@@ -3625,17 +3625,17 @@ var init_types = __esm({
             if (inner.status === "aborted")
               return INVALID;
             if (inner.status === "dirty")
-              status.dirty();
+              status2.dirty();
             executeRefinement(inner.value);
-            return { status: status.value, value: inner.value };
+            return { status: status2.value, value: inner.value };
           } else {
             return this._def.schema._parseAsync({ data: ctx.data, path: ctx.path, parent: ctx }).then((inner) => {
               if (inner.status === "aborted")
                 return INVALID;
               if (inner.status === "dirty")
-                status.dirty();
+                status2.dirty();
               return executeRefinement(inner.value).then(() => {
-                return { status: status.value, value: inner.value };
+                return { status: status2.value, value: inner.value };
               });
             });
           }
@@ -3653,13 +3653,13 @@ var init_types = __esm({
             if (result instanceof Promise) {
               throw new Error(`Asynchronous transform encountered during synchronous parse operation. Use .parseAsync instead.`);
             }
-            return { status: status.value, value: result };
+            return { status: status2.value, value: result };
           } else {
             return this._def.schema._parseAsync({ data: ctx.data, path: ctx.path, parent: ctx }).then((base) => {
               if (!isValid(base))
                 return INVALID;
               return Promise.resolve(effect.transform(base.value, checkCtx)).then((result) => ({
-                status: status.value,
+                status: status2.value,
                 value: result
               }));
             });
@@ -3838,7 +3838,7 @@ var init_types = __esm({
     };
     ZodPipeline = class _ZodPipeline extends ZodType {
       _parse(input) {
-        const { status, ctx } = this._processInputParams(input);
+        const { status: status2, ctx } = this._processInputParams(input);
         if (ctx.common.async) {
           const handleAsync = async () => {
             const inResult = await this._def.in._parseAsync({
@@ -3849,7 +3849,7 @@ var init_types = __esm({
             if (inResult.status === "aborted")
               return INVALID;
             if (inResult.status === "dirty") {
-              status.dirty();
+              status2.dirty();
               return DIRTY(inResult.value);
             } else {
               return this._def.out._parseAsync({
@@ -3869,7 +3869,7 @@ var init_types = __esm({
           if (inResult.status === "aborted")
             return INVALID;
           if (inResult.status === "dirty") {
-            status.dirty();
+            status2.dirty();
             return {
               status: "dirty",
               value: inResult.value
@@ -10619,8 +10619,8 @@ var init_types2 = __esm({
 });
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
-function isTerminal(status) {
-  return status === "completed" || status === "failed" || status === "cancelled";
+function isTerminal(status2) {
+  return status2 === "completed" || status2 === "failed" || status2 === "cancelled";
 }
 var init_interfaces = __esm({
   "node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js"() {
@@ -13147,8 +13147,8 @@ var init_protocol = __esm({
             }
             return task;
           },
-          storeTaskResult: async (taskId, status, result) => {
-            await taskStore.storeTaskResult(taskId, status, result, sessionId);
+          storeTaskResult: async (taskId, status2, result) => {
+            await taskStore.storeTaskResult(taskId, status2, result, sessionId);
             const task = await taskStore.getTask(taskId, sessionId);
             if (task) {
               const notification = TaskStatusNotificationSchema.parse({
@@ -13164,15 +13164,15 @@ var init_protocol = __esm({
           getTaskResult: (taskId) => {
             return taskStore.getTaskResult(taskId, sessionId);
           },
-          updateTaskStatus: async (taskId, status, statusMessage) => {
+          updateTaskStatus: async (taskId, status2, statusMessage) => {
             const task = await taskStore.getTask(taskId, sessionId);
             if (!task) {
               throw new McpError(ErrorCode.InvalidParams, `Task "${taskId}" not found - it may have been cleaned up`);
             }
             if (isTerminal(task.status)) {
-              throw new McpError(ErrorCode.InvalidParams, `Cannot update task "${taskId}" from terminal status "${task.status}" to "${status}". Terminal states (completed, failed, cancelled) cannot transition to other states.`);
+              throw new McpError(ErrorCode.InvalidParams, `Cannot update task "${taskId}" from terminal status "${task.status}" to "${status2}". Terminal states (completed, failed, cancelled) cannot transition to other states.`);
             }
-            await taskStore.updateTaskStatus(taskId, status, statusMessage, sessionId);
+            await taskStore.updateTaskStatus(taskId, status2, statusMessage, sessionId);
             const updatedTask = await taskStore.getTask(taskId, sessionId);
             if (updatedTask) {
               const notification = TaskStatusNotificationSchema.parse({
@@ -21825,15 +21825,15 @@ var init_state = __esm({
         await this.save();
         return task;
       }
-      async updateTaskStatus(id, status) {
+      async updateTaskStatus(id, status2) {
         const task = this.getTask(id);
         if (!task)
           throw new Error(`Task ${id} not found`);
         const oldStatus = task.status;
-        task.status = status;
+        task.status = status2;
         task.updatedAt = now();
         this.session.taskBoard.updatedAt = now();
-        this.emitEvent({ type: "task_updated", taskId: id, changes: { status } });
+        this.emitEvent({ type: "task_updated", taskId: id, changes: { status: status2 } });
         await this.save();
         return task;
       }
@@ -21849,15 +21849,15 @@ var init_state = __esm({
         await this.save();
         return task;
       }
-      async setReviewStatus(id, status, notes) {
+      async setReviewStatus(id, status2, notes) {
         const task = this.getTask(id);
         if (!task)
           throw new Error(`Task ${id} not found`);
-        task.reviewStatus = status;
+        task.reviewStatus = status2;
         if (notes)
           task.reviewNotes = notes;
         task.updatedAt = now();
-        const approved = status === "approved";
+        const approved = status2 === "approved";
         this.emitEvent({ type: "review_completed", taskId: id, approved });
         await this.save();
         return task;
@@ -22648,7 +22648,7 @@ function registerTaskTools(server) {
   server.tool("duo_task_update", "Update the status of a task (todo \u2192 in_progress \u2192 review \u2192 done).", {
     id: external_exports.string().describe("Task identifier"),
     status: external_exports.enum(["todo", "in_progress", "review", "done"]).describe("New status")
-  }, async ({ id, status }) => {
+  }, async ({ id, status: status2 }) => {
     const state = await getStateInstanceAutoLoad();
     if (!state) {
       return {
@@ -22658,8 +22658,11 @@ function registerTaskTools(server) {
       };
     }
     try {
-      const task = await state.updateTaskStatus(id, status);
-      await state.logChat("system", "event", `Task [${id}] status \u2192 ${status}`, id);
+      const task = await state.updateTaskStatus(id, status2);
+      if (status2 === "done") {
+        await state.checkpoint(`Task ${id} completed`);
+      }
+      await state.logChat("system", "event", `Task [${id}] status \u2192 ${status2}`, id);
       const statusIcons = {
         todo: "\u2B1C",
         in_progress: "\u{1F535}",
@@ -22670,7 +22673,7 @@ function registerTaskTools(server) {
         content: [
           {
             type: "text",
-            text: `${statusIcons[status]} Task [${task.id}] \u2192 ${status}`
+            text: `${statusIcons[status2]} Task [${task.id}] \u2192 ${status2}`
           }
         ],
         _meta: {
@@ -22704,6 +22707,9 @@ function registerTaskTools(server) {
     }
     try {
       const task = await state.reassignTask(id, assignee);
+      if (status === "done") {
+        await state.checkpoint(`Task ${id} completed`);
+      }
       await state.logChat("system", "event", `Task [${id}] reassigned to ${assignee}`, id);
       const icon = assignee === "human" ? "\u{1F9D1}" : "\u{1F916}";
       return {
@@ -22853,8 +22859,8 @@ function registerReviewTools(server) {
       };
     }
     try {
-      const status = approved ? "approved" : "changes_requested";
-      await state.setReviewStatus(taskId, status, feedback);
+      const status2 = approved ? "approved" : "changes_requested";
+      await state.setReviewStatus(taskId, status2, feedback);
       if (approved) {
         await state.updateTaskStatus(taskId, "done");
       }

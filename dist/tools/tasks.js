@@ -86,6 +86,10 @@ export function registerTaskTools(server) {
         try {
             const task = await state.updateTaskStatus(id, status);
             // Log task status change
+            // Auto-checkpoint when task is completed
+            if (status === "done") {
+                await state.checkpoint(`Task ${id} completed`);
+            }
             await state.logChat("system", "event", `Task [${id}] status → ${status}`, id);
             const statusIcons = {
                 todo: "⬜",
@@ -136,6 +140,10 @@ export function registerTaskTools(server) {
         try {
             const task = await state.reassignTask(id, assignee);
             // Log task reassignment
+            // Auto-checkpoint when task is completed
+            if (status === "done") {
+                await state.checkpoint(`Task ${id} completed`);
+            }
             await state.logChat("system", "event", `Task [${id}] reassigned to ${assignee}`, id);
             const icon = assignee === "human" ? "🧑" : "🤖";
             return {

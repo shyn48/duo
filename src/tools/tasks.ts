@@ -122,6 +122,11 @@ export function registerTaskTools(server: McpServer) {
         );
 
         // Log task status change
+        // Auto-checkpoint when task is completed
+        if (status === "done") {
+          await state.checkpoint(`Task ${id} completed`);
+        }
+
         await state.logChat(
           "system",
           "event",
@@ -189,6 +194,11 @@ export function registerTaskTools(server: McpServer) {
         );
 
         // Log task reassignment
+        // Auto-checkpoint when task is completed
+        if (status === "done") {
+          await state.checkpoint(`Task ${id} completed`);
+        }
+
         await state.logChat(
           "system",
           "event",
