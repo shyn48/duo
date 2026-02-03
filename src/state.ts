@@ -18,14 +18,19 @@ import type {
   SubagentInfo,
   DEFAULT_CONFIG,
   DuoEvent,
+  MessageSource,
 } from "./types.js";
 import type { DashboardServer } from "./dashboard/index.js";
+import { writeCheckpoint } from "./memory/checkpoint.js";
+import { ChatLogger } from "./memory/chat.js";
 
 export class DuoState {
   private session: DuoSession;
   private config: DuoConfig;
   private stateDir: string;
   private dashboard: DashboardServer | null = null;
+  private messageCount = 0;
+  private chatLogger: ChatLogger | null = null;
 
   constructor(projectRoot: string, config?: Partial<DuoConfig>) {
     const defaults: DuoConfig = {
@@ -93,6 +98,9 @@ export class DuoState {
       const data = await readFile(prefsPath, "utf-8");
       this.session.preferences = JSON.parse(data);
     }
+
+    // Initialize chat logger
+    this.chatLogger = new ChatLogger(this.stateDir, this.session.startedAt);
   }
 
   // ── Persistence ──
@@ -286,6 +294,40 @@ export class DuoState {
 
   getSubagents(): SubagentInfo[] {
     return this.session.subagents ?? [];
+  }
+
+  // ── Checkpoints ──
+
+  async checkpoint(context?: string): Promise<string> {
+    this.messageCount++;
+    return writeCheckpoint(this.stateDir, {
+      phase: this.session.phase,
+      tasks: this.session.taskBoard.tasks,
+      design: this.session.design,
+      subagents: this.session.subagents ?? [],
+      context,
+    });
+  }
+
+  getMessageCount(): number {
+    return this.messageCount;
+  }
+
+  // ── Chat Logging ──
+
+  async logChat(
+    from: MessageSource,
+    type: "message" | "tool" | "event",
+    content: string,
+    taskId?: string,
+  ): Promise<void> {
+    if (this.chatLogger) {
+      await this.chatLogger.log({ from, type, content, taskId });
+    }
+  }
+
+  getChatLogger(): ChatLogger | null {
+    return this.chatLogger;
   }
 
   // ── State Directory ──

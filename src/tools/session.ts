@@ -10,6 +10,8 @@ import type { SessionPhase } from "../types.js";
 import { DashboardServer } from "../dashboard/index.js";
 import { exec } from "node:child_process";
 import { ensureDocsDir, saveDocument } from "./document.js";
+import { ensureMemoryDir } from "../memory/checkpoint.js";
+import { ensureChatDir } from "../memory/chat.js";
 
 let dashboardInstance: DashboardServer | null = null;
 
@@ -49,8 +51,10 @@ export function registerSessionTools(server: McpServer) {
       const state = new DuoState(projectRoot);
       await state.init();
 
-      // Ensure .duo/docs/ directory exists
+      // Ensure .duo/docs/, .duo/memory/, and .duo/chat/ directories exist
       await ensureDocsDir(state.getStateDir());
+      await ensureMemoryDir(state.getStateDir());
+      await ensureChatDir(state.getStateDir());
 
       // Only set to design if this is a fresh session (no existing state)
       const session = state.getSession();
@@ -59,6 +63,13 @@ export function registerSessionTools(server: McpServer) {
         await state.setPhase("design");
       }
       setStateInstance(state);
+
+      // Log session start
+      await state.logChat(
+        "system",
+        "event",
+        isExisting ? "Session resumed" : "Session started",
+      );
 
       // Start dashboard
       try {
@@ -207,6 +218,16 @@ export function registerSessionTools(server: McpServer) {
 
       await state.setPhase(phase as SessionPhase);
 
+      // Auto-checkpoint on every phase transition
+      try {
+        await state.checkpoint(`Phase transition to ${phase}`);
+      } catch {
+        // Non-critical — don't fail the phase advance
+      }
+
+      // Log phase change
+      await state.logChat("system", "event", `Phase advanced to ${phase}`);
+
       const phaseMessages: Record<string, string> = {
         design: "🎨 Design phase — Let's discuss the approach.",
         planning: "📋 Planning phase — Breaking down tasks and assigning work.",
@@ -335,6 +356,13 @@ export function registerSessionTools(server: McpServer) {
 
       const tasks = state.getTasks();
       const done = tasks.filter((t) => t.status === "done").length;
+
+      // Log session end
+      await state.logChat(
+        "system",
+        "event",
+        `Session ended — ${done}/${tasks.length} tasks done`,
+      );
 
       // Stop dashboard
       if (dashboardInstance) {
