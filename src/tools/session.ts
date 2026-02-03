@@ -13,6 +13,7 @@ import { ensureDocsDir, saveDocument } from "./document.js";
 import { ensureMemoryDir } from "../memory/checkpoint.js";
 import { ensureChatDir } from "../memory/chat.js";
 import { saveSessionMetadata } from "./memory.js";
+import { readCodebaseKnowledge, appendCodebaseKnowledge } from "./codebase.js";
 
 let dashboardInstance: DashboardServer | null = null;
 
@@ -20,23 +21,18 @@ function openBrowser(url: string): void {
   const platform = process.platform;
   const command =
     platform === "darwin"
-      ? `open ${url}`
+      ? "open"
       : platform === "win32"
-        ? `start ${url}`
-        : `xdg-open ${url}`;
-
-  exec(command, (err) => {
-    if (err) {
-      console.error(`Failed to open browser: ${err.message}`);
-    }
-  });
+        ? "start"
+        : "xdg-open";
+  exec(`${command} ${url}`);
 }
 
 export function registerSessionTools(server: McpServer) {
-  // ── Start a Duo session ──
+  // ── Start session ──
   server.tool(
     "duo_session_start",
-    "Start a new Duo collaborative coding session. Call this at the beginning of a task when using the Duo workflow.",
+    "Start a new Duo collaborative coding session. Automatically loads codebase knowledge from prior sessions.",
     {
       projectRoot: z.string().describe("Absolute path to the project root directory"),
       dashboardPort: z
@@ -52,12 +48,12 @@ export function registerSessionTools(server: McpServer) {
       const state = new DuoState(projectRoot);
       await state.init();
 
-      // Ensure .duo/docs/, .duo/memory/, and .duo/chat/ directories exist
+      // Ensure .duo directories exist
       await ensureDocsDir(state.getStateDir());
       await ensureMemoryDir(state.getStateDir());
       await ensureChatDir(state.getStateDir());
 
-      // Only set to design if this is a fresh session (no existing state)
+      // Only set to design if this is a fresh session
       const session = state.getSession();
       const isExisting = session.taskBoard.tasks.length > 0 || session.phase !== "idle";
       if (!isExisting) {
@@ -65,7 +61,10 @@ export function registerSessionTools(server: McpServer) {
       }
       setStateInstance(state);
 
-      // Log session start
+      // 📚 Read codebase knowledge (creates template if new)
+      const { content: codebaseKnowledge, isNew: isNewCodebase } = 
+        await readCodebaseKnowledge(state.getStateDir());
+
       await state.logChat(
         "system",
         "event",
@@ -73,87 +72,71 @@ export function registerSessionTools(server: McpServer) {
       );
 
       // Start dashboard
+      let dashboardUrl = "";
       try {
         dashboardInstance = new DashboardServer(state, dashboardPort);
         state.setDashboard(dashboardInstance);
-        const url = await dashboardInstance.start();
-        
+        dashboardUrl = await dashboardInstance.start();
         if (openDashboard) {
-          openBrowser(url);
+          openBrowser(dashboardUrl);
         }
-
-        const phase = state.getPhase();
-        const tasks = state.getTasks();
-        const msg = isExisting
-          ? [
-              "🔄 Duo session resumed!",
-              "",
-              `Project: ${projectRoot}`,
-              `Phase: ${phase}`,
-              `Tasks: ${tasks.length} (${tasks.filter(t => t.status === "done").length} done)`,
-              "",
-              `📊 Dashboard: ${url}`,
-            ]
-          : [
-              "🎯 Duo session started!",
-              "",
-              `Project: ${projectRoot}`,
-              "Phase: Design",
-              "",
-              `📊 Dashboard: ${url}`,
-              "",
-              "Let's begin the design discussion.",
-              "Describe the task, and tell me if you have a design in mind.",
-            ];
-
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: msg.join("\n"),
-            },
-          ],
-        };
       } catch (err: any) {
         console.error(`Dashboard failed to start: ${err.message}`);
-        
-        // Continue without dashboard
-        const phase = state.getPhase();
-        const tasks = state.getTasks();
-        const msg = isExisting
-          ? [
-              "🔄 Duo session resumed!",
-              "",
-              `Project: ${projectRoot}`,
-              `Phase: ${phase}`,
-              `Tasks: ${tasks.length} (${tasks.filter(t => t.status === "done").length} done)`,
-              "",
-              "⚠️ Dashboard failed to start (continuing without it)",
-            ]
-          : [
-              "🎯 Duo session started!",
-              "",
-              `Project: ${projectRoot}`,
-              "Phase: Design",
-              "",
-              "⚠️ Dashboard failed to start (continuing without it)",
-              "",
-              "Let's begin the design discussion.",
-              "Describe the task, and tell me if you have a design in mind.",
-            ];
-
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: msg.join("\n"),
-            },
-          ],
-        };
       }
+
+      const phase = state.getPhase();
+      const tasks = state.getTasks();
+      
+      // Build codebase context section (truncate if large)
+      const maxCodebaseChars = 1500;
+      const codebaseSection = isNewCodebase
+        ? [
+            "",
+            "📚 **Codebase Knowledge:** New project! Created `.duo/CODEBASE.md`",
+            "   Update it as you discover patterns, architecture, and gotchas.",
+          ]
+        : [
+            "",
+            "📚 **Codebase Knowledge** (from prior sessions):",
+            "```markdown",
+            codebaseKnowledge.length > maxCodebaseChars
+              ? codebaseKnowledge.slice(0, maxCodebaseChars) + "\n... (see .duo/CODEBASE.md for full)"
+              : codebaseKnowledge,
+            "```",
+          ];
+      
+      const msg = isExisting
+        ? [
+            "🔄 Duo session resumed!",
+            "",
+            `Project: ${projectRoot}`,
+            `Phase: ${phase}`,
+            `Tasks: ${tasks.length} (${tasks.filter(t => t.status === "done").length} done)`,
+            dashboardUrl ? `\n📊 Dashboard: ${dashboardUrl}` : "",
+            ...codebaseSection,
+          ]
+        : [
+            "🎯 Duo session started!",
+            "",
+            `Project: ${projectRoot}`,
+            "Phase: Design",
+            dashboardUrl ? `\n📊 Dashboard: ${dashboardUrl}` : "",
+            ...codebaseSection,
+            "",
+            "Let's begin the design discussion.",
+            "Describe the task, and tell me if you have a design in mind.",
+          ];
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: msg.filter(Boolean).join("\n"),
+          },
+        ],
+      };
     },
   );
-
   // ── Get session status ──
   server.tool(
     "duo_session_status",
@@ -335,16 +318,16 @@ export function registerSessionTools(server: McpServer) {
     },
   );
 
-  // ── End session ──
+
   // ── End session ──
   server.tool(
     "duo_session_end",
-    "End the current Duo session. Auto-archives to .duo/sessions/ for future recall via duo_memory_recall.",
+    "End the current Duo session. Auto-archives for future recall and prompts for codebase knowledge updates.",
     {
       summary: z
         .string()
         .optional()
-        .describe("Optional summary of what was accomplished (auto-generated if not provided)"),
+        .describe("Summary of what was accomplished (auto-generated if not provided)"),
       keyLearnings: z
         .array(z.string())
         .optional()
@@ -352,13 +335,26 @@ export function registerSessionTools(server: McpServer) {
       tags: z
         .array(z.string())
         .optional()
-        .describe("Tags for categorizing this session"),
+        .describe("Tags for categorizing this session (e.g., 'auth', 'api', 'refactor')"),
+      codebaseUpdates: z
+        .object({
+          architecture: z.string().optional().describe("New architecture insights"),
+          patterns: z.array(z.string()).optional().describe("Patterns discovered"),
+          files: z.array(z.object({
+            path: z.string(),
+            purpose: z.string(),
+          })).optional().describe("Important files and their purposes"),
+          gotchas: z.array(z.string()).optional().describe("Gotchas or warnings discovered"),
+          conventions: z.array(z.string()).optional().describe("Coding conventions observed"),
+        })
+        .optional()
+        .describe("Updates to add to CODEBASE.md for future sessions"),
       keepState: z
         .boolean()
         .describe("Keep .duo state files for reference")
         .default(true),
     },
-    async ({ summary, keyLearnings, tags, keepState }) => {
+    async ({ summary, keyLearnings, tags, codebaseUpdates, keepState }) => {
       const state = await getStateInstanceAutoLoad();
       if (!state) {
         return {
@@ -376,7 +372,7 @@ export function registerSessionTools(server: McpServer) {
       const autoSummary = summary || 
         `${session.design?.taskDescription || "Duo session"} — ${done}/${tasks.length} tasks completed`;
 
-      // Auto-archive session to .duo/sessions/ for future recall
+      // Archive session to .duo/sessions/
       let archivePath: string | null = null;
       try {
         archivePath = await saveSessionMetadata(
@@ -390,7 +386,17 @@ export function registerSessionTools(server: McpServer) {
         console.error("Failed to archive session:", e);
       }
 
-      // Log session end
+      // 📚 Update CODEBASE.md if updates provided
+      let codebaseUpdated = false;
+      if (codebaseUpdates && Object.keys(codebaseUpdates).length > 0) {
+        try {
+          await appendCodebaseKnowledge(state.getStateDir(), codebaseUpdates);
+          codebaseUpdated = true;
+        } catch (e) {
+          console.error("Failed to update codebase knowledge:", e);
+        }
+      }
+
       await state.logChat(
         "system",
         "event",
@@ -418,13 +424,14 @@ export function registerSessionTools(server: McpServer) {
               "",
               `Tasks completed: ${done}/${tasks.length}`,
               archivePath
-                ? `📁 Archived for recall: ${archivePath}`
+                ? `📁 Archived: ${archivePath}`
                 : "⚠️ Archive failed",
+              codebaseUpdated
+                ? "📚 CODEBASE.md updated with new knowledge"
+                : "💡 Tip: Pass codebaseUpdates to persist patterns/gotchas for future sessions",
               keepState
                 ? "State files preserved in .duo/"
                 : "State files cleaned up.",
-              "",
-              "💡 Future sessions can recall this via duo_memory_recall",
             ].join("\n"),
           },
         ],

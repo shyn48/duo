@@ -21968,10 +21968,10 @@ async function getStateInstanceAutoLoad() {
   const projectRoot = process.env.DUO_PROJECT_ROOT;
   if (!projectRoot)
     return null;
-  const { existsSync: existsSync7 } = await import("node:fs");
-  const { join: join9 } = await import("node:path");
-  const sessionPath = join9(projectRoot, ".duo", "session.json");
-  if (!existsSync7(sessionPath))
+  const { existsSync: existsSync8 } = await import("node:fs");
+  const { join: join10 } = await import("node:path");
+  const sessionPath = join10(projectRoot, ".duo", "session.json");
+  if (!existsSync8(sessionPath))
     return null;
   const state = new DuoState(projectRoot);
   await state.init();
@@ -22529,19 +22529,110 @@ var init_memory = __esm({
   }
 });
 
+// dist/tools/codebase.js
+import { readFile as readFile6, writeFile as writeFile5 } from "node:fs/promises";
+import { existsSync as existsSync6 } from "node:fs";
+import { join as join7 } from "node:path";
+async function readCodebaseKnowledge(stateDir) {
+  const codebasePath = join7(stateDir, "CODEBASE.md");
+  if (!existsSync6(codebasePath)) {
+    await writeFile5(codebasePath, CODEBASE_TEMPLATE);
+    return { content: CODEBASE_TEMPLATE, isNew: true };
+  }
+  const content = await readFile6(codebasePath, "utf-8");
+  return { content, isNew: false };
+}
+async function appendCodebaseKnowledge(stateDir, updates) {
+  const codebasePath = join7(stateDir, "CODEBASE.md");
+  let content;
+  if (existsSync6(codebasePath)) {
+    content = await readFile6(codebasePath, "utf-8");
+  } else {
+    content = CODEBASE_TEMPLATE;
+  }
+  const timestamp = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  const additions = [];
+  if (updates.architecture) {
+    additions.push(`
+### Added ${timestamp}
+${updates.architecture}`);
+    content = insertInSection(content, "## Architecture", additions.pop());
+  }
+  if (updates.patterns && updates.patterns.length > 0) {
+    const patternsText = updates.patterns.map((p) => `- ${p}`).join("\n");
+    content = insertInSection(content, "## Key Patterns", `
+${patternsText}`);
+  }
+  if (updates.files && updates.files.length > 0) {
+    const filesText = updates.files.map((f) => `- \`${f.path}\` \u2014 ${f.purpose}`).join("\n");
+    content = insertInSection(content, "## Important Files", `
+${filesText}`);
+  }
+  if (updates.gotchas && updates.gotchas.length > 0) {
+    const gotchasText = updates.gotchas.map((g) => `- \u26A0\uFE0F ${g}`).join("\n");
+    content = insertInSection(content, "## Gotchas & Warnings", `
+${gotchasText}`);
+  }
+  if (updates.conventions && updates.conventions.length > 0) {
+    const conventionsText = updates.conventions.map((c) => `- ${c}`).join("\n");
+    content = insertInSection(content, "## Conventions", `
+${conventionsText}`);
+  }
+  await writeFile5(codebasePath, content);
+  return codebasePath;
+}
+function insertInSection(content, sectionHeader, newContent) {
+  const lines = content.split("\n");
+  const sectionIndex = lines.findIndex((line) => line.startsWith(sectionHeader));
+  if (sectionIndex === -1) {
+    return content + "\n" + sectionHeader + "\n" + newContent;
+  }
+  let insertIndex = sectionIndex + 1;
+  for (let i = sectionIndex + 1; i < lines.length; i++) {
+    if (lines[i].startsWith("## ")) {
+      insertIndex = i;
+      break;
+    }
+    insertIndex = i + 1;
+  }
+  lines.splice(insertIndex, 0, newContent);
+  return lines.join("\n");
+}
+var CODEBASE_TEMPLATE;
+var init_codebase = __esm({
+  "dist/tools/codebase.js"() {
+    "use strict";
+    CODEBASE_TEMPLATE = `# Codebase Knowledge
+
+> This file persists across Duo sessions. Update it when you discover important patterns, architecture decisions, or gotchas.
+
+## Architecture
+<!-- High-level architecture overview -->
+
+## Key Patterns
+<!-- Common patterns used in this codebase -->
+
+## Important Files
+<!-- Key files and their purposes -->
+
+## Gotchas & Warnings
+<!-- Things that tripped you up or are non-obvious -->
+
+## Conventions
+<!-- Coding conventions, naming patterns, etc. -->
+`;
+  }
+});
+
 // dist/tools/session.js
 import { exec } from "node:child_process";
 function openBrowser(url) {
   const platform = process.platform;
-  const command = platform === "darwin" ? `open ${url}` : platform === "win32" ? `start ${url}` : `xdg-open ${url}`;
-  exec(command, (err) => {
-    if (err) {
-      console.error(`Failed to open browser: ${err.message}`);
-    }
-  });
+  const command = platform === "darwin" ? "open" : platform === "win32" ? "start" : "xdg-open";
+  exec(`${command} ${url}`);
 }
 function registerSessionTools(server) {
-  server.tool("duo_session_start", "Start a new Duo collaborative coding session. Call this at the beginning of a task when using the Duo workflow.", {
+  server.tool("duo_session_start", "Start a new Duo collaborative coding session. Automatically loads codebase knowledge from prior sessions.", {
     projectRoot: external_exports.string().describe("Absolute path to the project root directory"),
     dashboardPort: external_exports.number().default(3456).describe("Port for the dashboard server (default: 3456)"),
     openDashboard: external_exports.boolean().default(true).describe("Automatically open dashboard in browser")
@@ -22557,75 +22648,62 @@ function registerSessionTools(server) {
       await state.setPhase("design");
     }
     setStateInstance(state);
+    const { content: codebaseKnowledge, isNew: isNewCodebase } = await readCodebaseKnowledge(state.getStateDir());
     await state.logChat("system", "event", isExisting ? "Session resumed" : "Session started");
+    let dashboardUrl = "";
     try {
       dashboardInstance = new DashboardServer(state, dashboardPort);
       state.setDashboard(dashboardInstance);
-      const url = await dashboardInstance.start();
+      dashboardUrl = await dashboardInstance.start();
       if (openDashboard) {
-        openBrowser(url);
+        openBrowser(dashboardUrl);
       }
-      const phase = state.getPhase();
-      const tasks = state.getTasks();
-      const msg = isExisting ? [
-        "\u{1F504} Duo session resumed!",
-        "",
-        `Project: ${projectRoot}`,
-        `Phase: ${phase}`,
-        `Tasks: ${tasks.length} (${tasks.filter((t) => t.status === "done").length} done)`,
-        "",
-        `\u{1F4CA} Dashboard: ${url}`
-      ] : [
-        "\u{1F3AF} Duo session started!",
-        "",
-        `Project: ${projectRoot}`,
-        "Phase: Design",
-        "",
-        `\u{1F4CA} Dashboard: ${url}`,
-        "",
-        "Let's begin the design discussion.",
-        "Describe the task, and tell me if you have a design in mind."
-      ];
-      return {
-        content: [
-          {
-            type: "text",
-            text: msg.join("\n")
-          }
-        ]
-      };
     } catch (err) {
       console.error(`Dashboard failed to start: ${err.message}`);
-      const phase = state.getPhase();
-      const tasks = state.getTasks();
-      const msg = isExisting ? [
-        "\u{1F504} Duo session resumed!",
-        "",
-        `Project: ${projectRoot}`,
-        `Phase: ${phase}`,
-        `Tasks: ${tasks.length} (${tasks.filter((t) => t.status === "done").length} done)`,
-        "",
-        "\u26A0\uFE0F Dashboard failed to start (continuing without it)"
-      ] : [
-        "\u{1F3AF} Duo session started!",
-        "",
-        `Project: ${projectRoot}`,
-        "Phase: Design",
-        "",
-        "\u26A0\uFE0F Dashboard failed to start (continuing without it)",
-        "",
-        "Let's begin the design discussion.",
-        "Describe the task, and tell me if you have a design in mind."
-      ];
-      return {
-        content: [
-          {
-            type: "text",
-            text: msg.join("\n")
-          }
-        ]
-      };
     }
+    const phase = state.getPhase();
+    const tasks = state.getTasks();
+    const maxCodebaseChars = 1500;
+    const codebaseSection = isNewCodebase ? [
+      "",
+      "\u{1F4DA} **Codebase Knowledge:** New project! Created `.duo/CODEBASE.md`",
+      "   Update it as you discover patterns, architecture, and gotchas."
+    ] : [
+      "",
+      "\u{1F4DA} **Codebase Knowledge** (from prior sessions):",
+      "```markdown",
+      codebaseKnowledge.length > maxCodebaseChars ? codebaseKnowledge.slice(0, maxCodebaseChars) + "\n... (see .duo/CODEBASE.md for full)" : codebaseKnowledge,
+      "```"
+    ];
+    const msg = isExisting ? [
+      "\u{1F504} Duo session resumed!",
+      "",
+      `Project: ${projectRoot}`,
+      `Phase: ${phase}`,
+      `Tasks: ${tasks.length} (${tasks.filter((t) => t.status === "done").length} done)`,
+      dashboardUrl ? `
+\u{1F4CA} Dashboard: ${dashboardUrl}` : "",
+      ...codebaseSection
+    ] : [
+      "\u{1F3AF} Duo session started!",
+      "",
+      `Project: ${projectRoot}`,
+      "Phase: Design",
+      dashboardUrl ? `
+\u{1F4CA} Dashboard: ${dashboardUrl}` : "",
+      ...codebaseSection,
+      "",
+      "Let's begin the design discussion.",
+      "Describe the task, and tell me if you have a design in mind."
+    ];
+    return {
+      content: [
+        {
+          type: "text",
+          text: msg.filter(Boolean).join("\n")
+        }
+      ]
+    };
   });
   server.tool("duo_session_status", "Show the current Duo session status including phase, task board, and progress.", {}, async () => {
     const state = await getStateInstanceAutoLoad();
@@ -22755,12 +22833,22 @@ Doc: ${filename}`;
       ]
     };
   });
-  server.tool("duo_session_end", "End the current Duo session. Auto-archives to .duo/sessions/ for future recall via duo_memory_recall.", {
-    summary: external_exports.string().optional().describe("Optional summary of what was accomplished (auto-generated if not provided)"),
+  server.tool("duo_session_end", "End the current Duo session. Auto-archives for future recall and prompts for codebase knowledge updates.", {
+    summary: external_exports.string().optional().describe("Summary of what was accomplished (auto-generated if not provided)"),
     keyLearnings: external_exports.array(external_exports.string()).optional().describe("Key insights or lessons from this session"),
-    tags: external_exports.array(external_exports.string()).optional().describe("Tags for categorizing this session"),
+    tags: external_exports.array(external_exports.string()).optional().describe("Tags for categorizing this session (e.g., 'auth', 'api', 'refactor')"),
+    codebaseUpdates: external_exports.object({
+      architecture: external_exports.string().optional().describe("New architecture insights"),
+      patterns: external_exports.array(external_exports.string()).optional().describe("Patterns discovered"),
+      files: external_exports.array(external_exports.object({
+        path: external_exports.string(),
+        purpose: external_exports.string()
+      })).optional().describe("Important files and their purposes"),
+      gotchas: external_exports.array(external_exports.string()).optional().describe("Gotchas or warnings discovered"),
+      conventions: external_exports.array(external_exports.string()).optional().describe("Coding conventions observed")
+    }).optional().describe("Updates to add to CODEBASE.md for future sessions"),
     keepState: external_exports.boolean().describe("Keep .duo state files for reference").default(true)
-  }, async ({ summary, keyLearnings, tags, keepState }) => {
+  }, async ({ summary, keyLearnings, tags, codebaseUpdates, keepState }) => {
     const state = await getStateInstanceAutoLoad();
     if (!state) {
       return {
@@ -22779,6 +22867,15 @@ Doc: ${filename}`;
     } catch (e) {
       console.error("Failed to archive session:", e);
     }
+    let codebaseUpdated = false;
+    if (codebaseUpdates && Object.keys(codebaseUpdates).length > 0) {
+      try {
+        await appendCodebaseKnowledge(state.getStateDir(), codebaseUpdates);
+        codebaseUpdated = true;
+      } catch (e) {
+        console.error("Failed to update codebase knowledge:", e);
+      }
+    }
     await state.logChat("system", "event", `Session ended \u2014 ${done}/${tasks.length} tasks done`);
     if (dashboardInstance) {
       await dashboardInstance.stop();
@@ -22796,10 +22893,9 @@ Doc: ${filename}`;
             "\u{1F44B} Duo session ended!",
             "",
             `Tasks completed: ${done}/${tasks.length}`,
-            archivePath ? `\u{1F4C1} Archived for recall: ${archivePath}` : "\u26A0\uFE0F Archive failed",
-            keepState ? "State files preserved in .duo/" : "State files cleaned up.",
-            "",
-            "\u{1F4A1} Future sessions can recall this via duo_memory_recall"
+            archivePath ? `\u{1F4C1} Archived: ${archivePath}` : "\u26A0\uFE0F Archive failed",
+            codebaseUpdated ? "\u{1F4DA} CODEBASE.md updated with new knowledge" : "\u{1F4A1} Tip: Pass codebaseUpdates to persist patterns/gotchas for future sessions",
+            keepState ? "State files preserved in .duo/" : "State files cleaned up."
           ].join("\n")
         }
       ]
@@ -22818,6 +22914,7 @@ var init_session = __esm({
     init_checkpoint();
     init_chat();
     init_memory();
+    init_codebase();
     dashboardInstance = null;
   }
 });
@@ -23441,8 +23538,8 @@ var init_recover = __esm({
 // dist/tools/search.js
 import { execFile as execFile2 } from "node:child_process";
 import { promisify as promisify2 } from "node:util";
-import { existsSync as existsSync6 } from "node:fs";
-import { join as join7 } from "node:path";
+import { existsSync as existsSync7 } from "node:fs";
+import { join as join8 } from "node:path";
 async function executeQmdSearch(query, mode, limit, collection) {
   try {
     const args2 = [
@@ -23477,9 +23574,9 @@ async function executeQmdSearch(query, mode, limit, collection) {
   }
 }
 async function ensureCollection(stateDir, sessionId) {
-  const chatDir = join7(stateDir, "chat");
-  const docsDir = join7(stateDir, "docs");
-  if (!existsSync6(chatDir) && !existsSync6(docsDir)) {
+  const chatDir = join8(stateDir, "chat");
+  const docsDir = join8(stateDir, "docs");
+  if (!existsSync7(chatDir) && !existsSync7(docsDir)) {
     return;
   }
   try {
@@ -23487,7 +23584,7 @@ async function ensureCollection(stateDir, sessionId) {
     const collections = JSON.parse(stdout || "[]");
     const collectionName = `duo-session`;
     const exists = collections.some((c) => c.name === collectionName);
-    if (!exists && existsSync6(chatDir)) {
+    if (!exists && existsSync7(chatDir)) {
       await execFileAsync2("qmd", [
         "collection",
         "add",
@@ -23499,7 +23596,7 @@ async function ensureCollection(stateDir, sessionId) {
       ]);
       await execFileAsync2("qmd", ["update"]);
     }
-    if (existsSync6(docsDir)) {
+    if (existsSync7(docsDir)) {
       const docsCollectionName = `duo-docs`;
       const docsExists = collections.some((c) => c.name === docsCollectionName);
       if (!docsExists) {
@@ -23634,12 +23731,12 @@ var init_index = __esm({
 // dist/cli.js
 import { readFileSync } from "node:fs";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
-import { dirname as dirname2, join as join8 } from "node:path";
+import { dirname as dirname2, join as join9 } from "node:path";
 var __filename2 = fileURLToPath2(import.meta.url);
 var __dirname2 = dirname2(__filename2);
 function getVersion() {
   try {
-    const pkg = JSON.parse(readFileSync(join8(__dirname2, "..", "package.json"), "utf-8"));
+    const pkg = JSON.parse(readFileSync(join9(__dirname2, "..", "package.json"), "utf-8"));
     return pkg.version ?? "0.0.0";
   } catch {
     return "0.0.0";

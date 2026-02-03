@@ -35,77 +35,99 @@ description: Collaborative pair programming workflow that splits coding tasks be
 
 ## Large Codebase Context Management
 
-Duo sessions persist and accumulate knowledge. On large codebases, **proactively leverage past sessions** to avoid re-learning the same things.
+Duo **automatically enforces context persistence** across sessions. You don't need to remember to do this — the tools do it for you.
 
-### At Session Start (ALWAYS do this)
+### Automatic Context Loading (🔒 Enforced by Tools)
 
-1. **Query past sessions:**
-   ```
-   duo_memory_recall query="[feature/area you're working on]" limit=5
-   ```
-2. **Review learnings:** Past sessions contain `keyLearnings` about architecture, gotchas, patterns
-3. **Build context:** Summarize relevant prior work before diving into design
-4. **Check for related docs:** Look in `.duo/docs/` for architecture decisions, patterns, prior reviews
+**On `duo_session_start`:**
+- ✅ Automatically reads `.duo/CODEBASE.md` and includes it in the response
+- ✅ Creates CODEBASE.md template if this is a new project
+- ✅ You see codebase knowledge immediately — no extra tool calls needed
+
+**On `duo_session_end`:**
+- ✅ Auto-archives session to `.duo/sessions/` for future recall
+- ✅ Accepts `codebaseUpdates` to append to CODEBASE.md
+
+### At Session Start (What You Receive)
+
+When you call `duo_session_start`, the response includes:
+```
+📚 **Codebase Knowledge** (from prior sessions):
+```markdown
+# Codebase Knowledge
+## Architecture
+- Go backend with Echo framework...
+## Gotchas & Warnings  
+- ⚠️ go-redis must be v9.7.0...
+```
+```
+
+**Your job:** Read this context. Use it in design discussions. Don't re-learn things that are documented.
+
+Additionally, query past sessions for feature-specific context:
+```
+duo_memory_recall query="[feature area]" limit=5
+```
 
 ### During Session
 
-1. **Search before asking:** When uncertain about a pattern or decision, try:
+1. **Search before asking:** When uncertain about a pattern or decision:
    ```
    duo_search query="[topic]" mode="keyword"
    ```
-2. **Document as you go:** When you discover something important about the codebase:
-   - Architecture patterns → `duo_document_save` to `.duo/docs/`
-   - Gotchas/warnings → Note in session for `keyLearnings`
-   - File relationships → Document in design
-3. **Cross-reference:** When touching files discussed in prior sessions, recall that context
+2. **Note things to persist:** When you discover something important:
+   - Architecture patterns → Remember for `codebaseUpdates` at session end
+   - Gotchas/warnings → Remember for `codebaseUpdates.gotchas`
+   - Important files → Remember for `codebaseUpdates.files`
 
-### Context Preservation (Proactive)
+### At Session End (Persist for Future You)
 
-**Don't wait for compaction to lose context.** When working on complex tasks:
+**This is where you contribute back.** The `codebaseUpdates` parameter persists knowledge to CODEBASE.md:
 
-1. **Save important decisions early:**
-   ```
-   duo_document_save content="[architecture decision]" filename="auth-flow-design"
-   ```
-2. **Checkpoint before risky operations:** The system auto-checkpoints on task completion, but you can note important state in docs
-3. **Summarize in reviews:** During cross-review, capture insights that future sessions should know
+```typescript
+duo_session_end(
+  summary: "Implemented OAuth flow with PKCE",
+  keyLearnings: [
+    "Google OAuth requires state parameter validation",
+    "Token refresh uses sliding window pattern"
+  ],
+  tags: ["auth", "oauth", "google"],
+  codebaseUpdates: {
+    architecture: "OAuth uses PKCE flow for mobile clients",
+    patterns: [
+      "Token refresh with sliding window",
+      "State validation via Redis"
+    ],
+    files: [
+      { path: "core-api/internal/service/google.go", purpose: "Google OAuth service" },
+      { path: "core-api/internal/handler/auth.go", purpose: "Auth endpoints" }
+    ],
+    gotchas: [
+      "go-redis must be v9.7.0, not v9.15.0",
+      "2FA encryption key must be exactly 32 bytes"
+    ],
+    conventions: [
+      "All OAuth providers implement OAuthProvider interface"
+    ]
+  }
+)
+```
 
-### At Session End (Build Future Context)
+**Result:** Future sessions start with this knowledge already loaded.
 
-**The quality of session end determines the quality of future session starts.**
-
-1. **Meaningful summary:** Not "completed tasks" but "what this session accomplished and why it matters"
-2. **Key learnings:** Architecture decisions, patterns discovered, gotchas encountered:
-   ```
-   duo_session_end summary="Implemented OAuth flow with PKCE" keyLearnings=[
-     "Google OAuth requires state parameter validation",
-     "Token refresh uses sliding window pattern",
-     "User service expects email to be verified"
-   ] tags=["auth", "oauth", "google"]
-   ```
-3. **Descriptive tags:** Use consistent tags for feature areas so `duo_memory_recall` can find related sessions
-
-### Codebase Knowledge Graph
-
-Over time, Duo sessions build a knowledge graph of your codebase:
+### The Knowledge Graph
 
 ```
 .duo/
+├── CODEBASE.md         # 🔒 Auto-loaded on session start
 ├── sessions/           # Archived sessions with learnings
-│   ├── 2026-02-01...   # OAuth implementation session
-│   ├── 2026-02-02...   # 2FA integration session
-│   └── 2026-02-03...   # Payment flow session
 ├── docs/               # Persistent documentation
-│   ├── auth-architecture.md
-│   ├── api-patterns.md
-│   └── testing-strategy.md
 ├── memory/             # Checkpoints for recovery
 └── chat/               # Full conversation history
 ```
 
-**Use this graph.** When starting work in an area, query for prior sessions and docs. When finishing, contribute back.
+**CODEBASE.md is the key file.** It accumulates knowledge across all sessions. Read it at start, update it at end.
 
-## Workflow
 
 Follow these phases in order. Do not skip phases unless the human explicitly asks.
 
