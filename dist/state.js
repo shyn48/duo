@@ -4,11 +4,15 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { writeCheckpoint } from "./memory/checkpoint.js";
+import { ChatLogger } from "./memory/chat.js";
 export class DuoState {
     session;
     config;
     stateDir;
     dashboard = null;
+    messageCount = 0;
+    chatLogger = null;
     constructor(projectRoot, config) {
         const defaults = {
             stateDir: ".duo",
@@ -66,6 +70,8 @@ export class DuoState {
             const data = await readFile(prefsPath, "utf-8");
             this.session.preferences = JSON.parse(data);
         }
+        // Initialize chat logger
+        this.chatLogger = new ChatLogger(this.stateDir, this.session.startedAt);
     }
     // ── Persistence ──
     async save() {
@@ -211,6 +217,29 @@ export class DuoState {
     }
     getSubagents() {
         return this.session.subagents ?? [];
+    }
+    // ── Checkpoints ──
+    async checkpoint(context) {
+        this.messageCount++;
+        return writeCheckpoint(this.stateDir, {
+            phase: this.session.phase,
+            tasks: this.session.taskBoard.tasks,
+            design: this.session.design,
+            subagents: this.session.subagents ?? [],
+            context,
+        });
+    }
+    getMessageCount() {
+        return this.messageCount;
+    }
+    // ── Chat Logging ──
+    async logChat(from, type, content, taskId) {
+        if (this.chatLogger) {
+            await this.chatLogger.log({ from, type, content, taskId });
+        }
+    }
+    getChatLogger() {
+        return this.chatLogger;
     }
     // ── State Directory ──
     getStateDir() {

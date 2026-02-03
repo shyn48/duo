@@ -1,13 +1,16 @@
 /**
  * Duo State Manager — Persistent task and session state
  */
-import type { DuoSession, DuoConfig, Task, TaskAssignee, TaskStatus, SessionPhase, DesignDocument, UserPreferences, SubagentInfo } from "./types.js";
+import type { DuoSession, DuoConfig, Task, TaskAssignee, TaskStatus, SessionPhase, DesignDocument, UserPreferences, SubagentInfo, MessageSource } from "./types.js";
 import type { DashboardServer } from "./dashboard/index.js";
+import { ChatLogger } from "./memory/chat.js";
 export declare class DuoState {
     private session;
     private config;
     private stateDir;
     private dashboard;
+    private messageCount;
+    private chatLogger;
     constructor(projectRoot: string, config?: Partial<DuoConfig>);
     setDashboard(dashboard: DashboardServer): void;
     private emitEvent;
@@ -30,6 +33,10 @@ export declare class DuoState {
     formatTaskBoard(): string;
     addSubagent(info: SubagentInfo): Promise<void>;
     getSubagents(): SubagentInfo[];
+    checkpoint(context?: string): Promise<string>;
+    getMessageCount(): number;
+    logChat(from: MessageSource, type: "message" | "tool" | "event", content: string, taskId?: string): Promise<void>;
+    getChatLogger(): ChatLogger | null;
     getStateDir(): string;
     getSession(): DuoSession;
     clear(): Promise<void>;

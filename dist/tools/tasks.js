@@ -85,6 +85,8 @@ export function registerTaskTools(server) {
         }
         try {
             const task = await state.updateTaskStatus(id, status);
+            // Log task status change
+            await state.logChat("system", "event", `Task [${id}] status → ${status}`, id);
             const statusIcons = {
                 todo: "⬜",
                 in_progress: "🔵",
@@ -133,6 +135,8 @@ export function registerTaskTools(server) {
         }
         try {
             const task = await state.reassignTask(id, assignee);
+            // Log task reassignment
+            await state.logChat("system", "event", `Task [${id}] reassigned to ${assignee}`, id);
             const icon = assignee === "human" ? "🧑" : "🤖";
             return {
                 content: [
