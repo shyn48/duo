@@ -1,7 +1,9 @@
 /**
  * Discovery Collection — Capture codebase insights during session
  *
- * Agents call duo_note_discovery when they discover patterns, gotchas, etc.
+ * v0.5.0: Consolidated duo_note_discovery + duo_list_discoveries → duo_discovery
+ *
+ * Agents call duo_discovery to note patterns, gotchas, etc.
  * These are stored and presented at session end for inclusion in CODEBASE.md.
  */
 import { z } from "zod";
@@ -117,24 +119,46 @@ export function discoveriesToCodebaseUpdates(discoveries) {
     return updates;
 }
 export function registerDiscoveryTools(server) {
-    server.tool("duo_note_discovery", "Note a codebase discovery during the session. Call this IMMEDIATELY when you discover patterns, gotchas, important files, or conventions. These are collected and suggested for CODEBASE.md at session end.", {
+    // ── Combined discovery tool: add or list ──
+    server.tool("duo_discovery", "Note a codebase discovery OR list all discoveries. Call immediately when you discover patterns, gotchas, important files, or conventions. Use action='list' to see all discoveries.", {
+        action: z
+            .enum(["add", "list"])
+            .default("add")
+            .describe("'add' to note a new discovery, 'list' to see all discoveries"),
         type: z
             .enum(["pattern", "gotcha", "architecture", "file", "convention"])
-            .describe("Type of discovery: pattern (recurring code pattern), gotcha (warning/pitfall), architecture (high-level design), file (important file), convention (coding convention)"),
+            .optional()
+            .describe("Type of discovery (required for action='add')"),
         content: z
             .string()
-            .describe("Description of what you discovered"),
+            .optional()
+            .describe("Description of what you discovered (required for action='add')"),
         filePath: z
             .string()
             .optional()
-            .describe("Relevant file path (required for 'file' type, optional for others)"),
-    }, async ({ type, content, filePath }) => {
+            .describe("Relevant file path (required for type='file', optional for others)"),
+    }, async ({ action, type, content, filePath }) => {
         const state = await getStateInstanceAutoLoad();
         if (!state) {
             return {
-                content: [
-                    { type: "text", text: "No active Duo session. Start one with duo_session_start." },
-                ],
+                content: [{ type: "text", text: "No active Duo session. Start one with duo_session_start." }],
+            };
+        }
+        // List mode
+        if (action === "list") {
+            const discoveries = await readDiscoveries(state.getStateDir());
+            return {
+                content: [{
+                        type: "text",
+                        text: `📝 Discoveries this session: ${discoveries.length}\n\n${formatDiscoveries(discoveries)}`,
+                    }],
+            };
+        }
+        // Add mode - validate required fields
+        if (!type || !content) {
+            return {
+                content: [{ type: "text", text: "For action='add', both 'type' and 'content' are required." }],
+                isError: true,
             };
         }
         const discovery = {
@@ -155,35 +179,10 @@ export function registerDiscoveryTools(server) {
             convention: "📏",
         };
         return {
-            content: [
-                {
+            content: [{
                     type: "text",
                     text: `${icons[type]} Discovery noted: [${type}] ${content}\n\nThis will be suggested for CODEBASE.md at session end.`,
-                },
-            ],
-        };
-    });
-    server.tool("duo_list_discoveries", "List all discoveries collected this session.", {}, async () => {
-        const state = await getStateInstanceAutoLoad();
-        if (!state) {
-            return {
-                content: [
-                    { type: "text", text: "No active Duo session." },
-                ],
-            };
-        }
-        const discoveries = await readDiscoveries(state.getStateDir());
-        return {
-            content: [
-                {
-                    type: "text",
-                    text: [
-                        `📝 Discoveries this session: ${discoveries.length}`,
-                        "",
-                        formatDiscoveries(discoveries),
-                    ].join("\n"),
-                },
-            ],
+                }],
         };
     });
 }

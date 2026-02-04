@@ -7323,18 +7323,18 @@ var ParseStatus = class _ParseStatus {
     if (this.value !== "aborted")
       this.value = "aborted";
   }
-  static mergeArray(status2, results) {
+  static mergeArray(status, results) {
     const arrayValue = [];
     for (const s of results) {
       if (s.status === "aborted")
         return INVALID;
       if (s.status === "dirty")
-        status2.dirty();
+        status.dirty();
       arrayValue.push(s.value);
     }
-    return { status: status2.value, value: arrayValue };
+    return { status: status.value, value: arrayValue };
   }
-  static async mergeObjectAsync(status2, pairs) {
+  static async mergeObjectAsync(status, pairs) {
     const syncPairs = [];
     for (const pair of pairs) {
       const key = await pair.key;
@@ -7344,9 +7344,9 @@ var ParseStatus = class _ParseStatus {
         value
       });
     }
-    return _ParseStatus.mergeObjectSync(status2, syncPairs);
+    return _ParseStatus.mergeObjectSync(status, syncPairs);
   }
-  static mergeObjectSync(status2, pairs) {
+  static mergeObjectSync(status, pairs) {
     const finalObject = {};
     for (const pair of pairs) {
       const { key, value } = pair;
@@ -7355,14 +7355,14 @@ var ParseStatus = class _ParseStatus {
       if (value.status === "aborted")
         return INVALID;
       if (key.status === "dirty")
-        status2.dirty();
+        status.dirty();
       if (value.status === "dirty")
-        status2.dirty();
+        status.dirty();
       if (key.value !== "__proto__" && (typeof value.value !== "undefined" || pair.alwaysSet)) {
         finalObject[key.value] = value.value;
       }
     }
-    return { status: status2.value, value: finalObject };
+    return { status: status.value, value: finalObject };
   }
 };
 var INVALID = Object.freeze({
@@ -7822,7 +7822,7 @@ var ZodString = class _ZodString2 extends ZodType {
       });
       return INVALID;
     }
-    const status2 = new ParseStatus();
+    const status = new ParseStatus();
     let ctx = void 0;
     for (const check2 of this._def.checks) {
       if (check2.kind === "min") {
@@ -7836,7 +7836,7 @@ var ZodString = class _ZodString2 extends ZodType {
             exact: false,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "max") {
         if (input.data.length > check2.value) {
@@ -7849,7 +7849,7 @@ var ZodString = class _ZodString2 extends ZodType {
             exact: false,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "length") {
         const tooBig = input.data.length > check2.value;
@@ -7875,7 +7875,7 @@ var ZodString = class _ZodString2 extends ZodType {
               message: check2.message
             });
           }
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "email") {
         if (!emailRegex.test(input.data)) {
@@ -7885,7 +7885,7 @@ var ZodString = class _ZodString2 extends ZodType {
             code: ZodIssueCode.invalid_string,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "emoji") {
         if (!emojiRegex) {
@@ -7898,7 +7898,7 @@ var ZodString = class _ZodString2 extends ZodType {
             code: ZodIssueCode.invalid_string,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "uuid") {
         if (!uuidRegex.test(input.data)) {
@@ -7908,7 +7908,7 @@ var ZodString = class _ZodString2 extends ZodType {
             code: ZodIssueCode.invalid_string,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "nanoid") {
         if (!nanoidRegex.test(input.data)) {
@@ -7918,7 +7918,7 @@ var ZodString = class _ZodString2 extends ZodType {
             code: ZodIssueCode.invalid_string,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "cuid") {
         if (!cuidRegex.test(input.data)) {
@@ -7928,7 +7928,7 @@ var ZodString = class _ZodString2 extends ZodType {
             code: ZodIssueCode.invalid_string,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "cuid2") {
         if (!cuid2Regex.test(input.data)) {
@@ -7938,7 +7938,7 @@ var ZodString = class _ZodString2 extends ZodType {
             code: ZodIssueCode.invalid_string,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "ulid") {
         if (!ulidRegex.test(input.data)) {
@@ -7948,7 +7948,7 @@ var ZodString = class _ZodString2 extends ZodType {
             code: ZodIssueCode.invalid_string,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "url") {
         try {
@@ -7960,7 +7960,7 @@ var ZodString = class _ZodString2 extends ZodType {
             code: ZodIssueCode.invalid_string,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "regex") {
         check2.regex.lastIndex = 0;
@@ -7972,7 +7972,7 @@ var ZodString = class _ZodString2 extends ZodType {
             code: ZodIssueCode.invalid_string,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "trim") {
         input.data = input.data.trim();
@@ -7984,7 +7984,7 @@ var ZodString = class _ZodString2 extends ZodType {
             validation: { includes: check2.value, position: check2.position },
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "toLowerCase") {
         input.data = input.data.toLowerCase();
@@ -7998,7 +7998,7 @@ var ZodString = class _ZodString2 extends ZodType {
             validation: { startsWith: check2.value },
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "endsWith") {
         if (!input.data.endsWith(check2.value)) {
@@ -8008,7 +8008,7 @@ var ZodString = class _ZodString2 extends ZodType {
             validation: { endsWith: check2.value },
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "datetime") {
         const regex = datetimeRegex(check2);
@@ -8019,7 +8019,7 @@ var ZodString = class _ZodString2 extends ZodType {
             validation: "datetime",
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "date") {
         const regex = dateRegex;
@@ -8030,7 +8030,7 @@ var ZodString = class _ZodString2 extends ZodType {
             validation: "date",
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "time") {
         const regex = timeRegex(check2);
@@ -8041,7 +8041,7 @@ var ZodString = class _ZodString2 extends ZodType {
             validation: "time",
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "duration") {
         if (!durationRegex.test(input.data)) {
@@ -8051,7 +8051,7 @@ var ZodString = class _ZodString2 extends ZodType {
             code: ZodIssueCode.invalid_string,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "ip") {
         if (!isValidIP(input.data, check2.version)) {
@@ -8061,7 +8061,7 @@ var ZodString = class _ZodString2 extends ZodType {
             code: ZodIssueCode.invalid_string,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "jwt") {
         if (!isValidJWT(input.data, check2.alg)) {
@@ -8071,7 +8071,7 @@ var ZodString = class _ZodString2 extends ZodType {
             code: ZodIssueCode.invalid_string,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "cidr") {
         if (!isValidCidr(input.data, check2.version)) {
@@ -8081,7 +8081,7 @@ var ZodString = class _ZodString2 extends ZodType {
             code: ZodIssueCode.invalid_string,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "base64") {
         if (!base64Regex.test(input.data)) {
@@ -8091,7 +8091,7 @@ var ZodString = class _ZodString2 extends ZodType {
             code: ZodIssueCode.invalid_string,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "base64url") {
         if (!base64urlRegex.test(input.data)) {
@@ -8101,13 +8101,13 @@ var ZodString = class _ZodString2 extends ZodType {
             code: ZodIssueCode.invalid_string,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else {
         util.assertNever(check2);
       }
     }
-    return { status: status2.value, value: input.data };
+    return { status: status.value, value: input.data };
   }
   _regex(regex, validation, message) {
     return this.refinement((data) => regex.test(data), {
@@ -8383,7 +8383,7 @@ var ZodNumber = class _ZodNumber extends ZodType {
       return INVALID;
     }
     let ctx = void 0;
-    const status2 = new ParseStatus();
+    const status = new ParseStatus();
     for (const check2 of this._def.checks) {
       if (check2.kind === "int") {
         if (!util.isInteger(input.data)) {
@@ -8394,7 +8394,7 @@ var ZodNumber = class _ZodNumber extends ZodType {
             received: "float",
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "min") {
         const tooSmall = check2.inclusive ? input.data < check2.value : input.data <= check2.value;
@@ -8408,7 +8408,7 @@ var ZodNumber = class _ZodNumber extends ZodType {
             exact: false,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "max") {
         const tooBig = check2.inclusive ? input.data > check2.value : input.data >= check2.value;
@@ -8422,7 +8422,7 @@ var ZodNumber = class _ZodNumber extends ZodType {
             exact: false,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "multipleOf") {
         if (floatSafeRemainder(input.data, check2.value) !== 0) {
@@ -8432,7 +8432,7 @@ var ZodNumber = class _ZodNumber extends ZodType {
             multipleOf: check2.value,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "finite") {
         if (!Number.isFinite(input.data)) {
@@ -8441,13 +8441,13 @@ var ZodNumber = class _ZodNumber extends ZodType {
             code: ZodIssueCode.not_finite,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else {
         util.assertNever(check2);
       }
     }
-    return { status: status2.value, value: input.data };
+    return { status: status.value, value: input.data };
   }
   gte(value, message) {
     return this.setLimit("min", value, true, errorUtil.toString(message));
@@ -8612,7 +8612,7 @@ var ZodBigInt = class _ZodBigInt extends ZodType {
       return this._getInvalidInput(input);
     }
     let ctx = void 0;
-    const status2 = new ParseStatus();
+    const status = new ParseStatus();
     for (const check2 of this._def.checks) {
       if (check2.kind === "min") {
         const tooSmall = check2.inclusive ? input.data < check2.value : input.data <= check2.value;
@@ -8625,7 +8625,7 @@ var ZodBigInt = class _ZodBigInt extends ZodType {
             inclusive: check2.inclusive,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "max") {
         const tooBig = check2.inclusive ? input.data > check2.value : input.data >= check2.value;
@@ -8638,7 +8638,7 @@ var ZodBigInt = class _ZodBigInt extends ZodType {
             inclusive: check2.inclusive,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "multipleOf") {
         if (input.data % check2.value !== BigInt(0)) {
@@ -8648,13 +8648,13 @@ var ZodBigInt = class _ZodBigInt extends ZodType {
             multipleOf: check2.value,
             message: check2.message
           });
-          status2.dirty();
+          status.dirty();
         }
       } else {
         util.assertNever(check2);
       }
     }
-    return { status: status2.value, value: input.data };
+    return { status: status.value, value: input.data };
   }
   _getInvalidInput(input) {
     const ctx = this._getOrReturnCtx(input);
@@ -8812,7 +8812,7 @@ var ZodDate = class _ZodDate extends ZodType {
       });
       return INVALID;
     }
-    const status2 = new ParseStatus();
+    const status = new ParseStatus();
     let ctx = void 0;
     for (const check2 of this._def.checks) {
       if (check2.kind === "min") {
@@ -8826,7 +8826,7 @@ var ZodDate = class _ZodDate extends ZodType {
             minimum: check2.value,
             type: "date"
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (check2.kind === "max") {
         if (input.data.getTime() > check2.value) {
@@ -8839,14 +8839,14 @@ var ZodDate = class _ZodDate extends ZodType {
             maximum: check2.value,
             type: "date"
           });
-          status2.dirty();
+          status.dirty();
         }
       } else {
         util.assertNever(check2);
       }
     }
     return {
-      status: status2.value,
+      status: status.value,
       value: new Date(input.data.getTime())
     };
   }
@@ -9032,7 +9032,7 @@ ZodVoid.create = (params) => {
 };
 var ZodArray = class _ZodArray extends ZodType {
   _parse(input) {
-    const { ctx, status: status2 } = this._processInputParams(input);
+    const { ctx, status } = this._processInputParams(input);
     const def = this._def;
     if (ctx.parsedType !== ZodParsedType.array) {
       addIssueToContext(ctx, {
@@ -9055,7 +9055,7 @@ var ZodArray = class _ZodArray extends ZodType {
           exact: true,
           message: def.exactLength.message
         });
-        status2.dirty();
+        status.dirty();
       }
     }
     if (def.minLength !== null) {
@@ -9068,7 +9068,7 @@ var ZodArray = class _ZodArray extends ZodType {
           exact: false,
           message: def.minLength.message
         });
-        status2.dirty();
+        status.dirty();
       }
     }
     if (def.maxLength !== null) {
@@ -9081,20 +9081,20 @@ var ZodArray = class _ZodArray extends ZodType {
           exact: false,
           message: def.maxLength.message
         });
-        status2.dirty();
+        status.dirty();
       }
     }
     if (ctx.common.async) {
       return Promise.all([...ctx.data].map((item, i) => {
         return def.type._parseAsync(new ParseInputLazyPath(ctx, item, ctx.path, i));
       })).then((result2) => {
-        return ParseStatus.mergeArray(status2, result2);
+        return ParseStatus.mergeArray(status, result2);
       });
     }
     const result = [...ctx.data].map((item, i) => {
       return def.type._parseSync(new ParseInputLazyPath(ctx, item, ctx.path, i));
     });
-    return ParseStatus.mergeArray(status2, result);
+    return ParseStatus.mergeArray(status, result);
   }
   get element() {
     return this._def.type;
@@ -9183,7 +9183,7 @@ var ZodObject = class _ZodObject extends ZodType {
       });
       return INVALID;
     }
-    const { status: status2, ctx } = this._processInputParams(input);
+    const { status, ctx } = this._processInputParams(input);
     const { shape, keys: shapeKeys } = this._getCached();
     const extraKeys = [];
     if (!(this._def.catchall instanceof ZodNever && this._def.unknownKeys === "strip")) {
@@ -9218,7 +9218,7 @@ var ZodObject = class _ZodObject extends ZodType {
             code: ZodIssueCode.unrecognized_keys,
             keys: extraKeys
           });
-          status2.dirty();
+          status.dirty();
         }
       } else if (unknownKeys === "strip") {
       } else {
@@ -9252,10 +9252,10 @@ var ZodObject = class _ZodObject extends ZodType {
         }
         return syncPairs;
       }).then((syncPairs) => {
-        return ParseStatus.mergeObjectSync(status2, syncPairs);
+        return ParseStatus.mergeObjectSync(status, syncPairs);
       });
     } else {
-      return ParseStatus.mergeObjectSync(status2, pairs);
+      return ParseStatus.mergeObjectSync(status, pairs);
     }
   }
   get shape() {
@@ -9733,7 +9733,7 @@ function mergeValues(a, b) {
 }
 var ZodIntersection = class extends ZodType {
   _parse(input) {
-    const { status: status2, ctx } = this._processInputParams(input);
+    const { status, ctx } = this._processInputParams(input);
     const handleParsed = (parsedLeft, parsedRight) => {
       if (isAborted(parsedLeft) || isAborted(parsedRight)) {
         return INVALID;
@@ -9746,9 +9746,9 @@ var ZodIntersection = class extends ZodType {
         return INVALID;
       }
       if (isDirty(parsedLeft) || isDirty(parsedRight)) {
-        status2.dirty();
+        status.dirty();
       }
-      return { status: status2.value, value: merged.data };
+      return { status: status.value, value: merged.data };
     };
     if (ctx.common.async) {
       return Promise.all([
@@ -9786,7 +9786,7 @@ ZodIntersection.create = (left, right, params) => {
 };
 var ZodTuple = class _ZodTuple extends ZodType {
   _parse(input) {
-    const { status: status2, ctx } = this._processInputParams(input);
+    const { status, ctx } = this._processInputParams(input);
     if (ctx.parsedType !== ZodParsedType.array) {
       addIssueToContext(ctx, {
         code: ZodIssueCode.invalid_type,
@@ -9814,7 +9814,7 @@ var ZodTuple = class _ZodTuple extends ZodType {
         exact: false,
         type: "array"
       });
-      status2.dirty();
+      status.dirty();
     }
     const items = [...ctx.data].map((item, itemIndex) => {
       const schema = this._def.items[itemIndex] || this._def.rest;
@@ -9824,10 +9824,10 @@ var ZodTuple = class _ZodTuple extends ZodType {
     }).filter((x) => !!x);
     if (ctx.common.async) {
       return Promise.all(items).then((results) => {
-        return ParseStatus.mergeArray(status2, results);
+        return ParseStatus.mergeArray(status, results);
       });
     } else {
-      return ParseStatus.mergeArray(status2, items);
+      return ParseStatus.mergeArray(status, items);
     }
   }
   get items() {
@@ -9859,7 +9859,7 @@ var ZodRecord = class _ZodRecord extends ZodType {
     return this._def.valueType;
   }
   _parse(input) {
-    const { status: status2, ctx } = this._processInputParams(input);
+    const { status, ctx } = this._processInputParams(input);
     if (ctx.parsedType !== ZodParsedType.object) {
       addIssueToContext(ctx, {
         code: ZodIssueCode.invalid_type,
@@ -9879,9 +9879,9 @@ var ZodRecord = class _ZodRecord extends ZodType {
       });
     }
     if (ctx.common.async) {
-      return ParseStatus.mergeObjectAsync(status2, pairs);
+      return ParseStatus.mergeObjectAsync(status, pairs);
     } else {
-      return ParseStatus.mergeObjectSync(status2, pairs);
+      return ParseStatus.mergeObjectSync(status, pairs);
     }
   }
   get element() {
@@ -9912,7 +9912,7 @@ var ZodMap = class extends ZodType {
     return this._def.valueType;
   }
   _parse(input) {
-    const { status: status2, ctx } = this._processInputParams(input);
+    const { status, ctx } = this._processInputParams(input);
     if (ctx.parsedType !== ZodParsedType.map) {
       addIssueToContext(ctx, {
         code: ZodIssueCode.invalid_type,
@@ -9939,11 +9939,11 @@ var ZodMap = class extends ZodType {
             return INVALID;
           }
           if (key.status === "dirty" || value.status === "dirty") {
-            status2.dirty();
+            status.dirty();
           }
           finalMap.set(key.value, value.value);
         }
-        return { status: status2.value, value: finalMap };
+        return { status: status.value, value: finalMap };
       });
     } else {
       const finalMap = /* @__PURE__ */ new Map();
@@ -9954,11 +9954,11 @@ var ZodMap = class extends ZodType {
           return INVALID;
         }
         if (key.status === "dirty" || value.status === "dirty") {
-          status2.dirty();
+          status.dirty();
         }
         finalMap.set(key.value, value.value);
       }
-      return { status: status2.value, value: finalMap };
+      return { status: status.value, value: finalMap };
     }
   }
 };
@@ -9972,7 +9972,7 @@ ZodMap.create = (keyType, valueType, params) => {
 };
 var ZodSet = class _ZodSet extends ZodType {
   _parse(input) {
-    const { status: status2, ctx } = this._processInputParams(input);
+    const { status, ctx } = this._processInputParams(input);
     if (ctx.parsedType !== ZodParsedType.set) {
       addIssueToContext(ctx, {
         code: ZodIssueCode.invalid_type,
@@ -9992,7 +9992,7 @@ var ZodSet = class _ZodSet extends ZodType {
           exact: false,
           message: def.minSize.message
         });
-        status2.dirty();
+        status.dirty();
       }
     }
     if (def.maxSize !== null) {
@@ -10005,7 +10005,7 @@ var ZodSet = class _ZodSet extends ZodType {
           exact: false,
           message: def.maxSize.message
         });
-        status2.dirty();
+        status.dirty();
       }
     }
     const valueType = this._def.valueType;
@@ -10015,10 +10015,10 @@ var ZodSet = class _ZodSet extends ZodType {
         if (element.status === "aborted")
           return INVALID;
         if (element.status === "dirty")
-          status2.dirty();
+          status.dirty();
         parsedSet.add(element.value);
       }
-      return { status: status2.value, value: parsedSet };
+      return { status: status.value, value: parsedSet };
     }
     const elements = [...ctx.data.values()].map((item, i) => valueType._parse(new ParseInputLazyPath(ctx, item, ctx.path, i)));
     if (ctx.common.async) {
@@ -10349,15 +10349,15 @@ var ZodEffects = class extends ZodType {
     return this._def.schema._def.typeName === ZodFirstPartyTypeKind.ZodEffects ? this._def.schema.sourceType() : this._def.schema;
   }
   _parse(input) {
-    const { status: status2, ctx } = this._processInputParams(input);
+    const { status, ctx } = this._processInputParams(input);
     const effect = this._def.effect || null;
     const checkCtx = {
       addIssue: (arg) => {
         addIssueToContext(ctx, arg);
         if (arg.fatal) {
-          status2.abort();
+          status.abort();
         } else {
-          status2.dirty();
+          status.dirty();
         }
       },
       get path() {
@@ -10369,7 +10369,7 @@ var ZodEffects = class extends ZodType {
       const processed = effect.transform(ctx.data, checkCtx);
       if (ctx.common.async) {
         return Promise.resolve(processed).then(async (processed2) => {
-          if (status2.value === "aborted")
+          if (status.value === "aborted")
             return INVALID;
           const result = await this._def.schema._parseAsync({
             data: processed2,
@@ -10380,12 +10380,12 @@ var ZodEffects = class extends ZodType {
             return INVALID;
           if (result.status === "dirty")
             return DIRTY(result.value);
-          if (status2.value === "dirty")
+          if (status.value === "dirty")
             return DIRTY(result.value);
           return result;
         });
       } else {
-        if (status2.value === "aborted")
+        if (status.value === "aborted")
           return INVALID;
         const result = this._def.schema._parseSync({
           data: processed,
@@ -10396,7 +10396,7 @@ var ZodEffects = class extends ZodType {
           return INVALID;
         if (result.status === "dirty")
           return DIRTY(result.value);
-        if (status2.value === "dirty")
+        if (status.value === "dirty")
           return DIRTY(result.value);
         return result;
       }
@@ -10421,17 +10421,17 @@ var ZodEffects = class extends ZodType {
         if (inner.status === "aborted")
           return INVALID;
         if (inner.status === "dirty")
-          status2.dirty();
+          status.dirty();
         executeRefinement(inner.value);
-        return { status: status2.value, value: inner.value };
+        return { status: status.value, value: inner.value };
       } else {
         return this._def.schema._parseAsync({ data: ctx.data, path: ctx.path, parent: ctx }).then((inner) => {
           if (inner.status === "aborted")
             return INVALID;
           if (inner.status === "dirty")
-            status2.dirty();
+            status.dirty();
           return executeRefinement(inner.value).then(() => {
-            return { status: status2.value, value: inner.value };
+            return { status: status.value, value: inner.value };
           });
         });
       }
@@ -10449,13 +10449,13 @@ var ZodEffects = class extends ZodType {
         if (result instanceof Promise) {
           throw new Error(`Asynchronous transform encountered during synchronous parse operation. Use .parseAsync instead.`);
         }
-        return { status: status2.value, value: result };
+        return { status: status.value, value: result };
       } else {
         return this._def.schema._parseAsync({ data: ctx.data, path: ctx.path, parent: ctx }).then((base) => {
           if (!isValid(base))
             return INVALID;
           return Promise.resolve(effect.transform(base.value, checkCtx)).then((result) => ({
-            status: status2.value,
+            status: status.value,
             value: result
           }));
         });
@@ -10634,7 +10634,7 @@ var ZodBranded = class extends ZodType {
 };
 var ZodPipeline = class _ZodPipeline extends ZodType {
   _parse(input) {
-    const { status: status2, ctx } = this._processInputParams(input);
+    const { status, ctx } = this._processInputParams(input);
     if (ctx.common.async) {
       const handleAsync = async () => {
         const inResult = await this._def.in._parseAsync({
@@ -10645,7 +10645,7 @@ var ZodPipeline = class _ZodPipeline extends ZodType {
         if (inResult.status === "aborted")
           return INVALID;
         if (inResult.status === "dirty") {
-          status2.dirty();
+          status.dirty();
           return DIRTY(inResult.value);
         } else {
           return this._def.out._parseAsync({
@@ -10665,7 +10665,7 @@ var ZodPipeline = class _ZodPipeline extends ZodType {
       if (inResult.status === "aborted")
         return INVALID;
       if (inResult.status === "dirty") {
-        status2.dirty();
+        status.dirty();
         return {
           status: "dirty",
           value: inResult.value
@@ -17037,8 +17037,8 @@ var UrlElicitationRequiredError = class extends McpError {
 };
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
-function isTerminal(status2) {
-  return status2 === "completed" || status2 === "failed" || status2 === "cancelled";
+function isTerminal(status) {
+  return status === "completed" || status === "failed" || status === "cancelled";
 }
 
 // node_modules/zod-to-json-schema/dist/esm/Options.js
@@ -19239,8 +19239,8 @@ var Protocol = class {
         }
         return task;
       },
-      storeTaskResult: async (taskId, status2, result) => {
-        await taskStore.storeTaskResult(taskId, status2, result, sessionId);
+      storeTaskResult: async (taskId, status, result) => {
+        await taskStore.storeTaskResult(taskId, status, result, sessionId);
         const task = await taskStore.getTask(taskId, sessionId);
         if (task) {
           const notification = TaskStatusNotificationSchema.parse({
@@ -19256,15 +19256,15 @@ var Protocol = class {
       getTaskResult: (taskId) => {
         return taskStore.getTaskResult(taskId, sessionId);
       },
-      updateTaskStatus: async (taskId, status2, statusMessage) => {
+      updateTaskStatus: async (taskId, status, statusMessage) => {
         const task = await taskStore.getTask(taskId, sessionId);
         if (!task) {
           throw new McpError(ErrorCode.InvalidParams, `Task "${taskId}" not found - it may have been cleaned up`);
         }
         if (isTerminal(task.status)) {
-          throw new McpError(ErrorCode.InvalidParams, `Cannot update task "${taskId}" from terminal status "${task.status}" to "${status2}". Terminal states (completed, failed, cancelled) cannot transition to other states.`);
+          throw new McpError(ErrorCode.InvalidParams, `Cannot update task "${taskId}" from terminal status "${task.status}" to "${status}". Terminal states (completed, failed, cancelled) cannot transition to other states.`);
         }
-        await taskStore.updateTaskStatus(taskId, status2, statusMessage, sessionId);
+        await taskStore.updateTaskStatus(taskId, status, statusMessage, sessionId);
         const updatedTask = await taskStore.getTask(taskId, sessionId);
         if (updatedTask) {
           const notification = TaskStatusNotificationSchema.parse({
@@ -21046,15 +21046,15 @@ var DuoState = class {
     await this.save();
     return task;
   }
-  async updateTaskStatus(id, status2) {
+  async updateTaskStatus(id, status) {
     const task = this.getTask(id);
     if (!task)
       throw new Error(`Task ${id} not found`);
     const oldStatus = task.status;
-    task.status = status2;
+    task.status = status;
     task.updatedAt = now();
     this.session.taskBoard.updatedAt = now();
-    this.emitEvent({ type: "task_updated", taskId: id, changes: { status: status2 } });
+    this.emitEvent({ type: "task_updated", taskId: id, changes: { status } });
     await this.save();
     return task;
   }
@@ -21070,15 +21070,15 @@ var DuoState = class {
     await this.save();
     return task;
   }
-  async setReviewStatus(id, status2, notes) {
+  async setReviewStatus(id, status, notes) {
     const task = this.getTask(id);
     if (!task)
       throw new Error(`Task ${id} not found`);
-    task.reviewStatus = status2;
+    task.reviewStatus = status;
     if (notes)
       task.reviewNotes = notes;
     task.updatedAt = now();
-    const approved = status2 === "approved";
+    const approved = status === "approved";
     this.emitEvent({ type: "review_completed", taskId: id, approved });
     await this.save();
     return task;
@@ -21224,10 +21224,10 @@ async function getStateInstanceAutoLoad() {
   const projectRoot = process.env.DUO_PROJECT_ROOT;
   if (!projectRoot)
     return null;
-  const { existsSync: existsSync9 } = await import("node:fs");
-  const { join: join10 } = await import("node:path");
-  const sessionPath = join10(projectRoot, ".duo", "session.json");
-  if (!existsSync9(sessionPath))
+  const { existsSync: existsSync8 } = await import("node:fs");
+  const { join: join9 } = await import("node:path");
+  const sessionPath = join9(projectRoot, ".duo", "session.json");
+  if (!existsSync8(sessionPath))
     return null;
   const state = new DuoState(projectRoot);
   await state.init();
@@ -21542,19 +21542,6 @@ function registerDocumentTools(server) {
 import { readFile as readFile5, writeFile as writeFile4, readdir as readdir2, mkdir as mkdir5 } from "node:fs/promises";
 import { existsSync as existsSync5 } from "node:fs";
 import { join as join6 } from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-var execFileAsync = promisify(execFile);
-var DuoMemorySaveSchema = {
-  summary: external_exports.string().describe("Human-readable summary of the session"),
-  keyLearnings: external_exports.array(external_exports.string()).optional().describe("Important insights or decisions from this session"),
-  tags: external_exports.array(external_exports.string()).optional().describe("Tags for categorizing this session (e.g., 'refactoring', 'bugfix')")
-};
-var DuoMemoryRecallSchema = {
-  query: external_exports.string().optional().describe("Optional search query to find specific past sessions"),
-  limit: external_exports.number().optional().default(5).describe("Number of sessions to recall"),
-  tags: external_exports.array(external_exports.string()).optional().describe("Filter by specific tags")
-};
 async function ensureSessionsDir(stateDir) {
   const sessionsDir = join6(stateDir, "sessions");
   if (!existsSync5(sessionsDir)) {
@@ -21585,171 +21572,6 @@ async function saveSessionMetadata(stateDir, session, summary, keyLearnings, tag
   };
   await writeFile4(metadataPath, JSON.stringify(metadata, null, 2));
   return metadataPath;
-}
-async function indexSessionWithQmd(stateDir, sessionId) {
-  try {
-    await execFileAsync("qmd", ["update"]);
-  } catch (error2) {
-    console.warn("QMD indexing warning:", error2.message);
-  }
-}
-async function loadSessionMetadata(stateDir) {
-  const sessionsDir = await ensureSessionsDir(stateDir);
-  if (!existsSync5(sessionsDir)) {
-    return [];
-  }
-  const files = await readdir2(sessionsDir);
-  const jsonFiles = files.filter((f) => f.endsWith(".json"));
-  const sessions = [];
-  for (const file of jsonFiles) {
-    try {
-      const content = await readFile5(join6(sessionsDir, file), "utf-8");
-      sessions.push(JSON.parse(content));
-    } catch (error2) {
-      console.warn(`Failed to parse session metadata: ${file}`);
-    }
-  }
-  sessions.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
-  return sessions;
-}
-function filterSessions(sessions, query, tags) {
-  let filtered = sessions;
-  if (tags && tags.length > 0) {
-    filtered = filtered.filter((s) => s.tags?.some((t) => tags.includes(t)));
-  }
-  if (query) {
-    const lowerQuery = query.toLowerCase();
-    filtered = filtered.filter((s) => s.summary.toLowerCase().includes(lowerQuery) || s.keyLearnings?.some((l) => l.toLowerCase().includes(lowerQuery)));
-  }
-  return filtered;
-}
-function formatSessionSummary(session) {
-  const date3 = new Date(session.startedAt).toLocaleString();
-  const tags = session.tags?.length ? ` [${session.tags.join(", ")}]` : "";
-  let output = `\u{1F4C5} ${date3}${tags}
-`;
-  output += `\u{1F4CA} ${session.stats.completedTasks}/${session.stats.totalTasks} tasks completed in ${session.stats.durationMinutes}m
-`;
-  output += `\u{1F4AD} ${session.summary}
-`;
-  if (session.keyLearnings && session.keyLearnings.length > 0) {
-    output += `
-\u{1F9E0} Key Learnings:
-`;
-    output += session.keyLearnings.map((l) => `  \u2022 ${l}`).join("\n");
-  }
-  return output;
-}
-function registerMemoryTools(server) {
-  server.tool("duo_memory_save", "Save current session to memory with a summary and key learnings for future recall.", DuoMemorySaveSchema, async ({ summary, keyLearnings, tags }) => {
-    try {
-      const stateDir = process.env.DUO_STATE_DIR || ".duo";
-      const sessionPath = join6(stateDir, "session.json");
-      if (!existsSync5(sessionPath)) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "No active session to save."
-            }
-          ],
-          isError: true
-        };
-      }
-      const sessionContent = await readFile5(sessionPath, "utf-8");
-      const session = JSON.parse(sessionContent);
-      const metadataPath = await saveSessionMetadata(stateDir, session, summary, keyLearnings, tags);
-      const sessionId = session.startedAt.replace(/[:.]/g, "-");
-      await indexSessionWithQmd(stateDir, sessionId);
-      return {
-        content: [
-          {
-            type: "text",
-            text: `\u2705 Session saved to memory!
-
-${formatSessionSummary({
-              sessionId,
-              startedAt: session.startedAt,
-              endedAt: (/* @__PURE__ */ new Date()).toISOString(),
-              phase: session.phase,
-              summary,
-              keyLearnings,
-              tags,
-              stats: {
-                totalTasks: session.taskBoard.tasks.length,
-                completedTasks: session.taskBoard.tasks.filter((t) => t.status === "done").length,
-                durationMinutes: Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1e3 / 60)
-              }
-            })}
-
-Metadata saved to: ${metadataPath}`
-          }
-        ]
-      };
-    } catch (error2) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Failed to save session: ${error2.message}`
-          }
-        ],
-        isError: true
-      };
-    }
-  });
-  server.tool("duo_memory_recall", "Recall previous Duo sessions to restore context. Filter by query or tags.", DuoMemoryRecallSchema, async ({ query, limit, tags }) => {
-    try {
-      const stateDir = process.env.DUO_STATE_DIR || ".duo";
-      const sessions = await loadSessionMetadata(stateDir);
-      if (sessions.length === 0) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "No previous sessions found. Start a new session with duo_session_start."
-            }
-          ]
-        };
-      }
-      const filtered = filterSessions(sessions, query, tags);
-      const results = filtered.slice(0, limit);
-      if (results.length === 0) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `No sessions found matching criteria. Total sessions: ${sessions.length}`
-            }
-          ]
-        };
-      }
-      const formattedResults = results.map((s, idx) => `
-[${idx + 1}]
-${formatSessionSummary(s)}`).join("\n\n---\n");
-      return {
-        content: [
-          {
-            type: "text",
-            text: `\u{1F4DA} Found ${results.length} previous session(s):
-${formattedResults}
-
-Use duo_search to search specific session content.`
-          }
-        ]
-      };
-    } catch (error2) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Failed to recall sessions: ${error2.message}`
-          }
-        ],
-        isError: true
-      };
-    }
-  });
 }
 
 // dist/tools/codebase.js
@@ -21933,17 +21755,33 @@ ${d.content}` : d.content;
   return updates;
 }
 function registerDiscoveryTools(server) {
-  server.tool("duo_note_discovery", "Note a codebase discovery during the session. Call this IMMEDIATELY when you discover patterns, gotchas, important files, or conventions. These are collected and suggested for CODEBASE.md at session end.", {
-    type: external_exports.enum(["pattern", "gotcha", "architecture", "file", "convention"]).describe("Type of discovery: pattern (recurring code pattern), gotcha (warning/pitfall), architecture (high-level design), file (important file), convention (coding convention)"),
-    content: external_exports.string().describe("Description of what you discovered"),
-    filePath: external_exports.string().optional().describe("Relevant file path (required for 'file' type, optional for others)")
-  }, async ({ type, content, filePath }) => {
+  server.tool("duo_discovery", "Note a codebase discovery OR list all discoveries. Call immediately when you discover patterns, gotchas, important files, or conventions. Use action='list' to see all discoveries.", {
+    action: external_exports.enum(["add", "list"]).default("add").describe("'add' to note a new discovery, 'list' to see all discoveries"),
+    type: external_exports.enum(["pattern", "gotcha", "architecture", "file", "convention"]).optional().describe("Type of discovery (required for action='add')"),
+    content: external_exports.string().optional().describe("Description of what you discovered (required for action='add')"),
+    filePath: external_exports.string().optional().describe("Relevant file path (required for type='file', optional for others)")
+  }, async ({ action, type, content, filePath }) => {
     const state = await getStateInstanceAutoLoad();
     if (!state) {
       return {
-        content: [
-          { type: "text", text: "No active Duo session. Start one with duo_session_start." }
-        ]
+        content: [{ type: "text", text: "No active Duo session. Start one with duo_session_start." }]
+      };
+    }
+    if (action === "list") {
+      const discoveries = await readDiscoveries(state.getStateDir());
+      return {
+        content: [{
+          type: "text",
+          text: `\u{1F4DD} Discoveries this session: ${discoveries.length}
+
+${formatDiscoveries(discoveries)}`
+        }]
+      };
+    }
+    if (!type || !content) {
+      return {
+        content: [{ type: "text", text: "For action='add', both 'type' and 'content' are required." }],
+        isError: true
       };
     }
     const discovery = {
@@ -21963,37 +21801,12 @@ function registerDiscoveryTools(server) {
       convention: "\u{1F4CF}"
     };
     return {
-      content: [
-        {
-          type: "text",
-          text: `${icons[type]} Discovery noted: [${type}] ${content}
+      content: [{
+        type: "text",
+        text: `${icons[type]} Discovery noted: [${type}] ${content}
 
 This will be suggested for CODEBASE.md at session end.`
-        }
-      ]
-    };
-  });
-  server.tool("duo_list_discoveries", "List all discoveries collected this session.", {}, async () => {
-    const state = await getStateInstanceAutoLoad();
-    if (!state) {
-      return {
-        content: [
-          { type: "text", text: "No active Duo session." }
-        ]
-      };
-    }
-    const discoveries = await readDiscoveries(state.getStateDir());
-    return {
-      content: [
-        {
-          type: "text",
-          text: [
-            `\u{1F4DD} Discoveries this session: ${discoveries.length}`,
-            "",
-            formatDiscoveries(discoveries)
-          ].join("\n")
-        }
-      ]
+      }]
     };
   });
 }
@@ -22308,147 +22121,99 @@ Doc: ${filename}`;
 }
 
 // dist/tools/tasks.js
+var TaskSchema2 = external_exports.object({
+  id: external_exports.string().describe("Short task identifier (e.g., '1', 'auth-logic', 'T3')"),
+  description: external_exports.string().describe("What this task involves"),
+  assignee: external_exports.enum(["human", "ai"]).describe("Who should do this task"),
+  files: external_exports.array(external_exports.string()).default([]).describe("Files this task will touch")
+});
 function registerTaskTools(server) {
-  server.tool("duo_task_add", "Add a task to the Duo task board during the planning phase.", {
-    id: external_exports.string().describe("Short task identifier (e.g., '1', 'auth-logic', 'T3')"),
-    description: external_exports.string().describe("What this task involves"),
-    assignee: external_exports.enum(["human", "ai"]).describe("Who should do this task"),
-    files: external_exports.array(external_exports.string()).describe("Files this task will touch").default([])
-  }, async ({ id, description, assignee, files }) => {
+  server.tool("duo_task_add", "Add one or more tasks to the Duo task board during planning phase.", {
+    // Accept either a single task or an array of tasks
+    task: TaskSchema2.optional().describe("Single task to add"),
+    tasks: external_exports.array(TaskSchema2).optional().describe("Multiple tasks to add at once")
+  }, async ({ task, tasks }) => {
     const state = await getStateInstanceAutoLoad();
     if (!state) {
       return {
-        content: [
-          { type: "text", text: "No active Duo session." }
-        ]
+        content: [{ type: "text", text: "No active Duo session." }]
       };
     }
-    const task = await state.addTask(id, description, assignee, files);
-    const icon = task.assignee === "human" ? "\u{1F9D1}" : "\u{1F916}";
-    return {
-      content: [
-        {
-          type: "text",
-          text: `${icon} Task [${task.id}] added: ${task.description}`
-        }
-      ]
-    };
-  });
-  server.tool("duo_task_add_bulk", "Add multiple tasks to the board at once during planning.", {
-    tasks: external_exports.array(external_exports.object({
-      id: external_exports.string(),
-      description: external_exports.string(),
-      assignee: external_exports.enum(["human", "ai"]),
-      files: external_exports.array(external_exports.string()).default([])
-    })).describe("Array of tasks to add")
-  }, async ({ tasks: taskList }) => {
-    const state = await getStateInstanceAutoLoad();
-    if (!state) {
+    const taskList = tasks || (task ? [task] : []);
+    if (taskList.length === 0) {
       return {
-        content: [
-          { type: "text", text: "No active Duo session." }
-        ]
+        content: [{ type: "text", text: "No tasks provided. Use 'task' for single or 'tasks' for multiple." }],
+        isError: true
       };
     }
     for (const t of taskList) {
       await state.addTask(t.id, t.description, t.assignee, t.files);
     }
+    if (taskList.length === 1) {
+      const t = taskList[0];
+      const icon = t.assignee === "human" ? "\u{1F9D1}" : "\u{1F916}";
+      return {
+        content: [{ type: "text", text: `${icon} Task [${t.id}] added: ${t.description}` }]
+      };
+    }
     return {
-      content: [
-        {
-          type: "text",
-          text: [
-            `\u2705 Added ${taskList.length} tasks`,
-            "",
-            state.formatTaskBoard()
-          ].join("\n")
-        }
-      ]
+      content: [{
+        type: "text",
+        text: `\u2705 Added ${taskList.length} tasks
+
+${state.formatTaskBoard()}`
+      }]
     };
   });
-  server.tool("duo_task_update", "Update the status of a task (todo \u2192 in_progress \u2192 review \u2192 done).", {
+  server.tool("duo_task_update", "Update a task's status and/or reassign it. Can change status, assignee, or both.", {
     id: external_exports.string().describe("Task identifier"),
-    status: external_exports.enum(["todo", "in_progress", "review", "done"]).describe("New status")
-  }, async ({ id, status: status2 }) => {
+    status: external_exports.enum(["todo", "in_progress", "review", "done"]).optional().describe("New status (optional)"),
+    assignee: external_exports.enum(["human", "ai"]).optional().describe("New assignee (optional)")
+  }, async ({ id, status, assignee }) => {
     const state = await getStateInstanceAutoLoad();
     if (!state) {
       return {
-        content: [
-          { type: "text", text: "No active Duo session." }
-        ]
+        content: [{ type: "text", text: "No active Duo session." }]
       };
     }
-    try {
-      const task = await state.updateTaskStatus(id, status2);
-      if (status2 === "done") {
-        await state.checkpoint(`Task ${id} completed`);
-      }
-      await state.logChat("system", "event", `Task [${id}] status \u2192 ${status2}`, id);
-      const statusIcons = {
-        todo: "\u2B1C",
-        in_progress: "\u{1F535}",
-        review: "\u{1F7E1}",
-        done: "\u2705"
-      };
+    if (!status && !assignee) {
       return {
-        content: [
-          {
-            type: "text",
-            text: `${statusIcons[status2]} Task [${task.id}] \u2192 ${status2}`
-          }
-        ],
-        _meta: {
-          from: "system",
-          timestamp: (/* @__PURE__ */ new Date()).toISOString()
-        }
-      };
-    } catch (e) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Error: ${e.message}`
-          }
-        ],
+        content: [{ type: "text", text: "Provide at least 'status' or 'assignee' to update." }],
         isError: true
       };
     }
-  });
-  server.tool("duo_task_reassign", "Reassign a task between human and AI. Use when the human wants to swap tasks mid-flight.", {
-    id: external_exports.string().describe("Task identifier"),
-    assignee: external_exports.enum(["human", "ai"]).describe("New assignee")
-  }, async ({ id, assignee }) => {
-    const state = await getStateInstanceAutoLoad();
-    if (!state) {
-      return {
-        content: [
-          { type: "text", text: "No active Duo session." }
-        ]
-      };
-    }
     try {
-      const task = await state.reassignTask(id, assignee);
-      if (status === "done") {
-        await state.checkpoint(`Task ${id} completed`);
+      const results = [];
+      if (status) {
+        const task = await state.updateTaskStatus(id, status);
+        if (status === "done") {
+          await state.checkpoint(`Task ${id} completed`);
+        }
+        await state.logChat("system", "event", `Task [${id}] status \u2192 ${status}`, id);
+        const statusIcons = {
+          todo: "\u2B1C",
+          in_progress: "\u{1F535}",
+          review: "\u{1F7E1}",
+          done: "\u2705"
+        };
+        results.push(`${statusIcons[status]} Status \u2192 ${status}`);
       }
-      await state.logChat("system", "event", `Task [${id}] reassigned to ${assignee}`, id);
-      const icon = assignee === "human" ? "\u{1F9D1}" : "\u{1F916}";
+      if (assignee) {
+        const task = await state.reassignTask(id, assignee);
+        await state.logChat("system", "event", `Task [${id}] reassigned to ${assignee}`, id);
+        const icon = assignee === "human" ? "\u{1F9D1}" : "\u{1F916}";
+        results.push(`${icon} Assignee \u2192 ${assignee}`);
+      }
       return {
-        content: [
-          {
-            type: "text",
-            text: `${icon} Task [${task.id}] reassigned to ${assignee}: ${task.description}`
-          }
-        ]
+        content: [{
+          type: "text",
+          text: `Task [${id}] updated:
+${results.join("\n")}`
+        }]
       };
     } catch (e) {
       return {
-        content: [
-          {
-            type: "text",
-            text: `Error: ${e.message}`
-          }
-        ],
+        content: [{ type: "text", text: `Error: ${e.message}` }],
         isError: true
       };
     }
@@ -22457,61 +22222,50 @@ function registerTaskTools(server) {
     const state = await getStateInstanceAutoLoad();
     if (!state) {
       return {
-        content: [
-          { type: "text", text: "No active Duo session." }
-        ]
+        content: [{ type: "text", text: "No active Duo session." }]
       };
     }
     return {
-      content: [
-        { type: "text", text: state.formatTaskBoard() }
-      ]
+      content: [{ type: "text", text: state.formatTaskBoard() }]
     };
   });
   server.tool("duo_help_request", "Log a help request from the human. Use escalating help: hints \u2192 pseudocode \u2192 implementation.", {
     taskId: external_exports.string().describe("Task the human needs help with"),
     question: external_exports.string().describe("What specifically they're stuck on"),
-    escalationLevel: external_exports.enum(["hint", "pseudocode", "implementation"]).describe("Level of help to provide").default("hint")
-  }, async ({ taskId, question, escalationLevel }) => {
+    level: external_exports.enum(["hint", "pseudocode", "implementation"]).default("hint").describe("Level of help: hint (conceptual), pseudocode (approach), implementation (code)")
+  }, async ({ taskId, question, level }) => {
     const state = await getStateInstanceAutoLoad();
     if (!state) {
       return {
-        content: [
-          { type: "text", text: "No active Duo session." }
-        ]
+        content: [{ type: "text", text: "No active Duo session." }]
       };
     }
     const task = state.getTask(taskId);
     if (!task) {
       return {
-        content: [
-          { type: "text", text: `Task ${taskId} not found.` }
-        ],
+        content: [{ type: "text", text: `Task ${taskId} not found.` }],
         isError: true
       };
     }
     const levelMessages = {
-      hint: `\u{1F4A1} Hint for task [${taskId}] "${task.description}":
+      hint: `\u{1F4A1} **Hint for task [${taskId}]** "${task.description}"
+
 Question: ${question}
 
-Provide a conceptual hint without code. Point in the right direction.`,
-      pseudocode: `\u{1F4DD} Pseudocode for task [${taskId}] "${task.description}":
+\u2192 Provide a conceptual hint without code. Point in the right direction.`,
+      pseudocode: `\u{1F4DD} **Pseudocode for task [${taskId}]** "${task.description}"
+
 Question: ${question}
 
-Provide pseudocode or a pattern reference. Show the approach without full implementation.`,
-      implementation: `\u{1F4BB} Implementation help for task [${taskId}] "${task.description}":
+\u2192 Provide pseudocode or a pattern reference. Show the approach without full implementation.`,
+      implementation: `\u{1F4BB} **Implementation help for task [${taskId}]** "${task.description}"
+
 Question: ${question}
 
-Provide actual code. The human explicitly asked for implementation help.`
+\u2192 Provide actual code. The human explicitly asked for implementation help.`
     };
     return {
-      content: [
-        { type: "text", text: levelMessages[escalationLevel] }
-      ],
-      _meta: {
-        from: "system",
-        timestamp: (/* @__PURE__ */ new Date()).toISOString()
-      }
+      content: [{ type: "text", text: levelMessages[level] }]
     };
   });
 }
@@ -22573,8 +22327,8 @@ function registerReviewTools(server) {
       };
     }
     try {
-      const status2 = approved ? "approved" : "changes_requested";
-      await state.setReviewStatus(taskId, status2, feedback);
+      const status = approved ? "approved" : "changes_requested";
+      await state.setReviewStatus(taskId, status, feedback);
       if (approved) {
         await state.updateTaskStatus(taskId, "done");
       }
@@ -22894,140 +22648,6 @@ function registerRecoverTools(server) {
   });
 }
 
-// dist/tools/search.js
-import { execFile as execFile2 } from "node:child_process";
-import { promisify as promisify2 } from "node:util";
-import { existsSync as existsSync8 } from "node:fs";
-import { join as join9 } from "node:path";
-var execFileAsync2 = promisify2(execFile2);
-var DuoSearchSchema = {
-  query: external_exports.string().describe("Search query for session context"),
-  mode: external_exports.enum(["keyword", "semantic"]).default("keyword").describe("Search mode: 'keyword' for fast BM25, 'semantic' for vector search"),
-  limit: external_exports.number().optional().default(5).describe("Number of results to return"),
-  collection: external_exports.string().optional().describe("Specific QMD collection to search (defaults to duo-session)")
-};
-async function executeQmdSearch(query, mode, limit, collection) {
-  try {
-    const args = [
-      mode === "semantic" ? "vsearch" : "search",
-      query,
-      "-n",
-      String(limit),
-      "--json"
-    ];
-    if (collection) {
-      args.push("-c", collection);
-    }
-    const { stdout } = await execFileAsync2("qmd", args);
-    if (!stdout.trim()) {
-      return [];
-    }
-    const results = JSON.parse(stdout);
-    if (Array.isArray(results)) {
-      return results.map((r) => ({
-        path: r.path || r.file || "",
-        score: r.score || r.similarity || 0,
-        excerpt: r.excerpt || r.content || "",
-        metadata: r.metadata || {}
-      }));
-    }
-    return [];
-  } catch (error2) {
-    if (error2.code === "ENOENT") {
-      throw new Error("QMD is not installed. Install with: bun install -g https://github.com/tobi/qmd");
-    }
-    throw error2;
-  }
-}
-async function ensureCollection(stateDir, sessionId) {
-  const chatDir = join9(stateDir, "chat");
-  const docsDir = join9(stateDir, "docs");
-  if (!existsSync8(chatDir) && !existsSync8(docsDir)) {
-    return;
-  }
-  try {
-    const { stdout } = await execFileAsync2("qmd", ["collection", "list", "--json"]);
-    const collections = JSON.parse(stdout || "[]");
-    const collectionName = `duo-session`;
-    const exists = collections.some((c) => c.name === collectionName);
-    if (!exists && existsSync8(chatDir)) {
-      await execFileAsync2("qmd", [
-        "collection",
-        "add",
-        chatDir,
-        "--name",
-        collectionName,
-        "--mask",
-        "**/*.jsonl"
-      ]);
-      await execFileAsync2("qmd", ["update"]);
-    }
-    if (existsSync8(docsDir)) {
-      const docsCollectionName = `duo-docs`;
-      const docsExists = collections.some((c) => c.name === docsCollectionName);
-      if (!docsExists) {
-        await execFileAsync2("qmd", [
-          "collection",
-          "add",
-          docsDir,
-          "--name",
-          docsCollectionName,
-          "--mask",
-          "**/*.md"
-        ]);
-        await execFileAsync2("qmd", ["update"]);
-      }
-    }
-  } catch (error2) {
-    console.warn("QMD collection setup warning:", error2.message);
-  }
-}
-function registerSearchTools(server) {
-  server.tool("duo_search", "Search session context (chat history, documents) using QMD. Use keyword mode for fast searches, semantic mode for conceptual similarity.", DuoSearchSchema, async ({ query, mode, limit, collection }) => {
-    try {
-      const stateDir = process.env.DUO_STATE_DIR || ".duo";
-      const sessionId = process.env.DUO_SESSION_ID || "current";
-      await ensureCollection(stateDir, sessionId);
-      const results = await executeQmdSearch(query, mode, limit, collection || "duo-session");
-      if (results.length === 0) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `No results found for query: "${query}"`
-            }
-          ]
-        };
-      }
-      const formattedResults = results.map((r, idx) => {
-        return `[${idx + 1}] ${r.path} (score: ${r.score.toFixed(3)})
-${r.excerpt}
-`;
-      }).join("\n---\n");
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Found ${results.length} results for "${query}":
-
-${formattedResults}`
-          }
-        ]
-      };
-    } catch (error2) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Search failed: ${error2.message}`
-          }
-        ],
-        isError: true
-      };
-    }
-  });
-}
-
 // dist/tools/index.js
 function registerTools(server) {
   registerSessionTools(server);
@@ -23036,8 +22656,6 @@ function registerTools(server) {
   registerSubagentTools(server);
   registerDocumentTools(server);
   registerRecoverTools(server);
-  registerSearchTools(server);
-  registerMemoryTools(server);
   registerDiscoveryTools(server);
 }
 

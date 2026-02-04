@@ -1,7 +1,9 @@
 /**
  * Discovery Collection — Capture codebase insights during session
  *
- * Agents call duo_note_discovery when they discover patterns, gotchas, etc.
+ * v0.5.0: Consolidated duo_note_discovery + duo_list_discoveries → duo_discovery
+ *
+ * Agents call duo_discovery to note patterns, gotchas, etc.
  * These are stored and presented at session end for inclusion in CODEBASE.md.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";

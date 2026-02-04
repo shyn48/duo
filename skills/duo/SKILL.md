@@ -53,46 +53,47 @@ Duo **automatically enforces context persistence** across sessions. You don't ne
 When you call `duo_session_start`, the response includes:
 ```
 📚 **Codebase Knowledge** (from prior sessions):
-```markdown
 # Codebase Knowledge
 ## Architecture
 - Go backend with Echo framework...
 ## Gotchas & Warnings  
 - ⚠️ go-redis must be v9.7.0...
 ```
-```
 
 **Your job:** Read this context. Use it in design discussions. Don't re-learn things that are documented.
 
-Additionally, query past sessions for feature-specific context:
-```
-duo_memory_recall query="[feature area]" limit=5
-```
+> **Note:** For querying past sessions beyond what's in CODEBASE.md, use your platform's memory system (e.g., claude-mem for Claude Code).
 
 
-### During Session (🔒 Use duo_note_discovery!)
+### During Session (🔒 Use duo_discovery!)
 
 **When you discover something important, note it IMMEDIATELY:**
 
 ```typescript
 // Discovered a gotcha? Note it now!
-duo_note_discovery({
+duo_discovery({
+  action: "add",
   type: "gotcha",
   content: "go-redis v9.15.0 doesn't exist, must use v9.7.0"
 })
 
 // Found an important file? Note it!
-duo_note_discovery({
+duo_discovery({
+  action: "add",
   type: "file",
   content: "OAuth service implementation",
   filePath: "core-api/internal/service/google.go"
 })
 
 // Noticed a pattern? Note it!
-duo_note_discovery({
+duo_discovery({
+  action: "add",
   type: "pattern",
   content: "Token refresh uses sliding window pattern"
 })
+
+// List all discoveries so far
+duo_discovery({ action: "list" })
 ```
 
 **Discovery types:**
@@ -107,10 +108,6 @@ duo_note_discovery({
 - Context compaction might lose the insight
 - Discoveries are stored in `.duo/discoveries.json` (survives compaction)
 
-**Search for prior context:**
-```
-duo_search query="[topic]" mode="keyword"
-```
 
 ### At Session End
 
@@ -202,7 +199,7 @@ Swap any tasks? Or good to go?
 
 1. Start session and add tasks using Duo MCP tools:
    - `duo_session_start` — initialize session and dashboard
-   - `duo_task_add_bulk` — add all planned tasks at once
+   - `duo_task_add` — add tasks (single or bulk with `tasks` array)
 2. For each AI-assigned task, use `duo_subagent_spawn` to spawn a sub-agent:
    - Provide the task ID, description, prompt, and relevant files
    - The tool builds a structured prompt with design context and project info
@@ -218,7 +215,7 @@ Swap any tasks? Or good to go?
      3. Show pseudocode or a pattern reference
      4. Only if explicitly asked: provide implementation
      5. Ask if they want to keep the task or hand it off
-   - **"swap task N to me/you"** → `duo_task_reassign`
+   - **"swap task N to me/you"** → `duo_task_update` with new `assignee`
    - **"status"** → `duo_task_board`
 6. When subagent completes, review its output, then notify:
    "🤖 Task N done — I've reviewed the code. Ready for your review when you are."
@@ -255,21 +252,20 @@ Cross-review is critical. This is where code quality and understanding happen.
 5. The tool returns `nextAction: "prompt_for_end"` — **ask the human** if they want to end the session or continue working
 6. If ending: call `duo_session_end`
 
-## MCP Tools Reference
+## MCP Tools Reference (v0.5.0)
 
 ### Session Management
 - `duo_session_start` — Start session, create `.duo/` and `.duo/docs/`, launch dashboard
 - `duo_session_status` — Show current phase, task board, progress
 - `duo_phase_advance` — Move to next phase (design → planning → executing → reviewing → integrating)
 - `duo_design_save` — Save design doc (auto-stores to `.duo/docs/`)
-- `duo_session_end` — End session, stop dashboard
+- `duo_session_end` — End session, stop dashboard, archive to `.duo/sessions/`
 
 ### Task Management
-- `duo_task_add` / `duo_task_add_bulk` — Add tasks to the board
-- `duo_task_update` — Update task status (todo → in_progress → review → done)
-- `duo_task_reassign` — Swap task between human/AI
+- `duo_task_add` — Add task(s) to the board. Use `task` for single or `tasks` for bulk array.
+- `duo_task_update` — Update task status and/or assignee. Accepts `status` and/or `assignee`.
 - `duo_task_board` — Display current board
-- `duo_help_request` — Log help request with escalation level
+- `duo_help_request` — Log help request with escalation level (hint → pseudocode → implementation)
 
 ### Sub-Agent Orchestration
 - `duo_subagent_spawn` — Spawn a sub-agent for an AI task. Returns a structured `subagentPrompt` that you pass to your platform's native spawning mechanism. Validates dependencies, tracks subagent state.
@@ -279,43 +275,26 @@ Cross-review is critical. This is where code quality and understanding happen.
 - `duo_review_submit` — Submit review feedback (approve/request changes)
 - `duo_integrate` — Run integration phase, auto-save summary to `.duo/docs/`
 
-### Documentation
+### Documentation & Discovery
 - `duo_document_save` — Save a document to `.duo/docs/` with auto-generated filename
+- `duo_discovery` — Note codebase discoveries (action: "add") or list them (action: "list")
 
-### Session Recovery & Memory (CRITICAL)
-
-**On Session Start:**
-1. Call `duo_memory_recall` to check for relevant past sessions on this task/feature
-2. If prior work exists, summarize it for context before starting design
+### Session Recovery
 
 **After Context Compaction (MANDATORY):**
 1. **Detect it:** Summary at top of context, missing conversation history, uncertain about state
 2. **Immediately call `duo_recover_session`** — do NOT guess, do NOT ask the human
-3. If you need more context about discussions, use `duo_search query="topic"`
-4. Then summarize what you recovered and continue
-
-**During Session:**
-- Use `duo_search` when you need to find specific decisions, discussions, or code references
-- Checkpoints are auto-saved on task completion and phase transitions
-
-**On Session End:**
-- `duo_session_end` auto-archives to `.duo/sessions/` for future recall
-- Optionally provide summary, keyLearnings, and tags for better searchability
+3. Then summarize what you recovered and continue
 
 **Tools:**
 - `duo_recover_session` — **MANDATORY after context loss.** Restores phase, tasks, design from latest checkpoint.
-- `duo_search` — Search chat history and context. Use `mode="keyword"` (fast) or `mode="semantic"` (deep).
-- `duo_memory_recall` — Recall past sessions. **Use at session start** to find relevant prior work.
-- `duo_memory_save` — Manually save session metadata (auto-called by `duo_session_end`).
 
 **Automatic Features:**
 - Checkpoints saved on task completion + phase transitions
 - Chat history logged to `.duo/chat/session-{startedAt}.jsonl`
 - Sessions auto-archived on `duo_session_end`
 
-- `"human"` — Human-initiated actions
-- `"subagent"` — Sub-agent updates
-- `"system"` — System events
+> **Memory/Search:** For searching past sessions and context beyond what Duo provides, use your platform's memory system (e.g., claude-mem plugin for Claude Code).
 
 ## Anti-Patterns (avoid these)
 
