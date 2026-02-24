@@ -10,6 +10,7 @@ import { registerRecoverTools } from "./recover.js";
 import { registerSearchTools } from "./search.js";
 import { registerMemoryTools } from "./memory.js";
 import { registerDiscoveryTools } from "./discovery.js";
+import { registerSnapshotTools } from "./snapshot.js";
 export function registerTools(server) {
     registerSessionTools(server);
     registerTaskTools(server);
@@ -20,5 +21,6 @@ export function registerTools(server) {
     registerSearchTools(server);
     registerMemoryTools(server);
     registerDiscoveryTools(server);
+    registerSnapshotTools(server);
 }
 //# sourceMappingURL=index.js.map

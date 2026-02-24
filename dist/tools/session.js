@@ -162,6 +162,19 @@ export function registerSessionTools(server) {
                 ],
             };
         }
+        // Phase gate check — block invalid transitions
+        const gateError = state.checkPhaseGate(phase);
+        if (gateError) {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: ["🚫 Phase transition blocked:", "", gateError].join("\n"),
+                    },
+                ],
+                isError: true,
+            };
+        }
         await state.setPhase(phase);
         // Auto-checkpoint on every phase transition
         try {
@@ -172,21 +185,68 @@ export function registerSessionTools(server) {
         }
         // Log phase change
         await state.logChat("system", "event", `Phase advanced to ${phase}`);
-        const phaseMessages = {
-            design: "🎨 Design phase — Let's discuss the approach.",
-            planning: "📋 Planning phase — Breaking down tasks and assigning work.",
-            executing: "⚡ Execution phase — Time to code! I'll work on my tasks, you work on yours.",
-            reviewing: "🔍 Review phase — Cross-reviewing each other's code.",
-            integrating: "🔗 Integration phase — Merging, testing, and committing.",
-            idle: "✅ Session complete!",
+        const phaseInfo = {
+            design: {
+                message: "🎨 Design phase — Discussing approach.",
+                next: "REQUIRED NEXT: Reach consensus on design, then call duo_design_save.",
+            },
+            planning: {
+                message: "📋 Planning phase — Breaking down the task.",
+                next: "REQUIRED NEXT: Call duo_task_add_bulk with the full task breakdown. Both human and AI must have tasks. Then present the board and wait for human approval before calling duo_approve_task_board.",
+            },
+            executing: {
+                message: "⚡ Execution phase — Time to build!",
+                next: "REQUIRED NEXT: (1) Tell human to start their tasks in their IDE. (2) Spawn subagents for each AI task via duo_subagent_spawn. (3) Keep this thread free for human check-ins. Do NOT block waiting for subagents.",
+            },
+            reviewing: {
+                message: "🔍 Review phase — Cross-reviewing code.",
+                next: "REQUIRED NEXT: For each task call duo_review_start then duo_review_submit. Human reviews AI code, AI reviews human code.",
+            },
+            integrating: {
+                message: "🔗 Integration phase — Final steps.",
+                next: "REQUIRED NEXT: (1) Run tests. (2) Fix failures. (3) Commit. (4) Call duo_codebase_update with session learnings. (5) Call duo_session_end.",
+            },
+            idle: {
+                message: "✅ Session complete!",
+                next: "Start a new session with duo_session_start when ready.",
+            },
         };
+        const info = phaseInfo[phase] ?? { message: `Phase: ${phase}`, next: "" };
         return {
             content: [
                 {
                     type: "text",
-                    text: phaseMessages[phase] ?? `Phase set to: ${phase}`,
+                    text: [info.message, "", info.next].join("\n"),
                 },
             ],
+        };
+    });
+    // ── Approve task board ──
+    server.tool("duo_approve_task_board", "Record that the human has approved the task board. REQUIRED before advancing to executing phase. Call this after the human confirms the task breakdown.", {}, async () => {
+        const state = await getStateInstanceAutoLoad();
+        if (!state) {
+            return { content: [{ type: "text", text: "No active Duo session." }] };
+        }
+        const tasks = state.getTasks();
+        if (tasks.length === 0) {
+            return {
+                content: [{ type: "text", text: "Cannot approve: task board is empty. Add tasks first with duo_task_add_bulk." }],
+                isError: true,
+            };
+        }
+        await state.approveTaskBoard();
+        const human = tasks.filter((t) => t.assignee === "human").length;
+        const ai = tasks.filter((t) => t.assignee === "ai").length;
+        return {
+            content: [{
+                    type: "text",
+                    text: [
+                        "✅ Task board approved!",
+                        `🧑 Human: ${human} tasks  🤖 AI: ${ai} tasks`,
+                        "",
+                        "REQUIRED NEXT: Call duo_phase_advance with phase='executing' to begin.",
+                    ].join("\n"),
+                }],
         };
     });
     // ── Save design document ──
@@ -257,7 +317,7 @@ export function registerSessionTools(server) {
                         `Deferred: ${deferredItems.length}`,
                         docNote,
                         "",
-                        "Ready to move to planning phase.",
+                        "REQUIRED NEXT: Call duo_phase_advance with phase='planning', then call duo_task_add_bulk.",
                     ].join("\n"),
                 },
             ],

@@ -135,6 +135,75 @@ export class DuoState {
     return this.session.phase;
   }
 
+  /**
+   * Check if a phase transition is allowed.
+   * Returns null if OK, or an error message describing what's missing.
+   */
+  checkPhaseGate(targetPhase: SessionPhase): string | null {
+    const tasks = this.session.taskBoard.tasks;
+
+    switch (targetPhase) {
+      case "planning": {
+        if (!this.session.design) {
+          return "Cannot advance to planning: design document not saved. Call duo_design_save first.";
+        }
+        break;
+      }
+      case "executing": {
+        if (!this.session.design) {
+          return "Cannot advance to executing: no design document. Complete design phase first.";
+        }
+        const humanTasks = tasks.filter((t) => t.assignee === "human");
+        const aiTasks = tasks.filter((t) => t.assignee === "ai");
+        if (tasks.length === 0) {
+          return "Cannot advance to executing: task board is empty. Call duo_task_add_bulk to add tasks first.";
+        }
+        if (humanTasks.length === 0) {
+          return "Cannot advance to executing: no tasks assigned to human. Assign at least one task to the human.";
+        }
+        if (aiTasks.length === 0) {
+          return "Cannot advance to executing: no tasks assigned to AI.";
+        }
+        if (!this.session.taskBoardApproved) {
+          return "Cannot advance to executing: task board not approved. Present the board to the human and call duo_approve_task_board after they confirm.";
+        }
+        break;
+      }
+      case "reviewing": {
+        const aiDone = tasks.filter(
+          (t) => t.assignee === "ai" && (t.status === "done" || t.status === "review"),
+        );
+        if (aiDone.length === 0) {
+          return "Cannot advance to reviewing: no AI tasks are complete yet.";
+        }
+        break;
+      }
+      case "integrating": {
+        const notDone = tasks.filter((t) => t.status !== "done");
+        if (notDone.length > 0) {
+          const ids = notDone.map((t) => `[${t.id}]`).join(", ");
+          return `Cannot advance to integrating: tasks still pending: ${ids}.`;
+        }
+        const unreviewed = tasks.filter((t) => !t.reviewStatus);
+        if (unreviewed.length > 0) {
+          const ids = unreviewed.map((t) => `[${t.id}]`).join(", ");
+          return `Cannot advance to integrating: tasks not reviewed: ${ids}. Call duo_review_submit for each.`;
+        }
+        break;
+      }
+    }
+    return null;
+  }
+
+  async approveTaskBoard(): Promise<void> {
+    this.session.taskBoardApproved = true;
+    await this.save();
+  }
+
+  isTaskBoardApproved(): boolean {
+    return this.session.taskBoardApproved ?? false;
+  }
+
   async setPhase(phase: SessionPhase): Promise<void> {
     this.session.phase = phase;
     this.emitEvent({ type: "phase_changed", phase });

@@ -12,6 +12,7 @@ import { registerRecoverTools } from "./recover.js";
 import { registerSearchTools } from "./search.js";
 import { registerMemoryTools } from "./memory.js";
 import { registerDiscoveryTools } from "./discovery.js";
+import { registerSnapshotTools } from "./snapshot.js";
 
 export function registerTools(server: McpServer) {
   registerSessionTools(server);
@@ -23,4 +24,5 @@ export function registerTools(server: McpServer) {
   registerSearchTools(server);
   registerMemoryTools(server);
   registerDiscoveryTools(server);
+  registerSnapshotTools(server);
 }

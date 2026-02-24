@@ -31,6 +31,7 @@ export interface DuoSession {
     phase: SessionPhase;
     projectRoot: string;
     taskBoard: TaskBoard;
+    taskBoardApproved?: boolean;
     design: DesignDocument | null;
     preferences: UserPreferences;
     subagents: SubagentInfo[];

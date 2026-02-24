@@ -19,6 +19,13 @@ export declare class DuoState {
     savePreferences(): Promise<void>;
     saveDesign(): Promise<void>;
     getPhase(): SessionPhase;
+    /**
+     * Check if a phase transition is allowed.
+     * Returns null if OK, or an error message describing what's missing.
+     */
+    checkPhaseGate(targetPhase: SessionPhase): string | null;
+    approveTaskBoard(): Promise<void>;
+    isTaskBoardApproved(): boolean;
     setPhase(phase: SessionPhase): Promise<void>;
     setDesign(design: DesignDocument): Promise<void>;
     getDesign(): DesignDocument | null;
