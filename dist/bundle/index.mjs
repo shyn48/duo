@@ -5,6 +5,9 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
 var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
@@ -6786,6 +6789,67 @@ var require_dist = __commonJS({
     module.exports = exports = formatsPlugin;
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.default = formatsPlugin;
+  }
+});
+
+// dist/memory/checkpoint.js
+var checkpoint_exports = {};
+__export(checkpoint_exports, {
+  ensureMemoryDir: () => ensureMemoryDir,
+  listCheckpoints: () => listCheckpoints,
+  readLatestCheckpoint: () => readLatestCheckpoint,
+  writeCheckpoint: () => writeCheckpoint
+});
+import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+async function ensureMemoryDir(stateDir) {
+  const memoryDir = join(stateDir, "memory");
+  if (!existsSync(memoryDir)) {
+    await mkdir(memoryDir, { recursive: true });
+  }
+  return memoryDir;
+}
+async function writeCheckpoint(stateDir, data) {
+  const memoryDir = await ensureMemoryDir(stateDir);
+  const timestamp = (/* @__PURE__ */ new Date()).toISOString();
+  const decisions = data.design?.decisions ?? [];
+  const filesModified = Array.from(new Set(data.tasks.flatMap((t) => t.files)));
+  const checkpoint = {
+    timestamp,
+    phase: data.phase,
+    tasks: data.tasks,
+    design: data.design,
+    subagents: data.subagents,
+    decisions,
+    filesModified,
+    context: data.context ?? ""
+  };
+  const safeTimestamp = timestamp.replace(/[:.]/g, "-");
+  const filename = `checkpoint-${safeTimestamp}.jsonl`;
+  const filePath = join(memoryDir, filename);
+  await writeFile(filePath, JSON.stringify(checkpoint) + "\n");
+  return filename;
+}
+async function listCheckpoints(stateDir) {
+  const memoryDir = join(stateDir, "memory");
+  if (!existsSync(memoryDir))
+    return [];
+  const files = await readdir(memoryDir);
+  return files.filter((f) => f.startsWith("checkpoint-") && f.endsWith(".jsonl")).sort().reverse();
+}
+async function readLatestCheckpoint(stateDir) {
+  const files = await listCheckpoints(stateDir);
+  if (files.length === 0)
+    return null;
+  const memoryDir = join(stateDir, "memory");
+  const content = await readFile(join(memoryDir, files[0]), "utf-8");
+  const line = content.trim().split("\n")[0];
+  return JSON.parse(line);
+}
+var init_checkpoint = __esm({
+  "dist/memory/checkpoint.js"() {
+    "use strict";
   }
 });
 
@@ -20824,58 +20888,10 @@ var StdioServerTransport = class {
 };
 
 // dist/state.js
+init_checkpoint();
 import { readFile as readFile3, writeFile as writeFile2, mkdir as mkdir3 } from "node:fs/promises";
 import { existsSync as existsSync3 } from "node:fs";
 import { join as join3 } from "node:path";
-
-// dist/memory/checkpoint.js
-import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-async function ensureMemoryDir(stateDir) {
-  const memoryDir = join(stateDir, "memory");
-  if (!existsSync(memoryDir)) {
-    await mkdir(memoryDir, { recursive: true });
-  }
-  return memoryDir;
-}
-async function writeCheckpoint(stateDir, data) {
-  const memoryDir = await ensureMemoryDir(stateDir);
-  const timestamp = (/* @__PURE__ */ new Date()).toISOString();
-  const decisions = data.design?.decisions ?? [];
-  const filesModified = Array.from(new Set(data.tasks.flatMap((t) => t.files)));
-  const checkpoint = {
-    timestamp,
-    phase: data.phase,
-    tasks: data.tasks,
-    design: data.design,
-    subagents: data.subagents,
-    decisions,
-    filesModified,
-    context: data.context ?? ""
-  };
-  const safeTimestamp = timestamp.replace(/[:.]/g, "-");
-  const filename = `checkpoint-${safeTimestamp}.jsonl`;
-  const filePath = join(memoryDir, filename);
-  await writeFile(filePath, JSON.stringify(checkpoint) + "\n");
-  return filename;
-}
-async function listCheckpoints(stateDir) {
-  const memoryDir = join(stateDir, "memory");
-  if (!existsSync(memoryDir))
-    return [];
-  const files = await readdir(memoryDir);
-  return files.filter((f) => f.startsWith("checkpoint-") && f.endsWith(".jsonl")).sort().reverse();
-}
-async function readLatestCheckpoint(stateDir) {
-  const files = await listCheckpoints(stateDir);
-  if (files.length === 0)
-    return null;
-  const memoryDir = join(stateDir, "memory");
-  const content = await readFile(join(memoryDir, files[0]), "utf-8");
-  const line = content.trim().split("\n")[0];
-  return JSON.parse(line);
-}
 
 // dist/memory/chat.js
 import { appendFile, readFile as readFile2, mkdir as mkdir2 } from "node:fs/promises";
@@ -21008,6 +21024,69 @@ var DuoState = class {
   // ── Phase Management ──
   getPhase() {
     return this.session.phase;
+  }
+  /**
+   * Check if a phase transition is allowed.
+   * Returns null if OK, or an error message describing what's missing.
+   */
+  checkPhaseGate(targetPhase) {
+    const tasks = this.session.taskBoard.tasks;
+    switch (targetPhase) {
+      case "planning": {
+        if (!this.session.design) {
+          return "Cannot advance to planning: design document not saved. Call duo_design_save first.";
+        }
+        break;
+      }
+      case "executing": {
+        if (!this.session.design) {
+          return "Cannot advance to executing: no design document. Complete design phase first.";
+        }
+        const humanTasks = tasks.filter((t) => t.assignee === "human");
+        const aiTasks = tasks.filter((t) => t.assignee === "ai");
+        if (tasks.length === 0) {
+          return "Cannot advance to executing: task board is empty. Call duo_task_add_bulk to add tasks first.";
+        }
+        if (humanTasks.length === 0) {
+          return "Cannot advance to executing: no tasks assigned to human. Assign at least one task to the human.";
+        }
+        if (aiTasks.length === 0) {
+          return "Cannot advance to executing: no tasks assigned to AI.";
+        }
+        if (!this.session.taskBoardApproved) {
+          return "Cannot advance to executing: task board not approved. Present the board to the human and call duo_approve_task_board after they confirm.";
+        }
+        break;
+      }
+      case "reviewing": {
+        const aiDone = tasks.filter((t) => t.assignee === "ai" && (t.status === "done" || t.status === "review"));
+        if (aiDone.length === 0) {
+          return "Cannot advance to reviewing: no AI tasks are complete yet.";
+        }
+        break;
+      }
+      case "integrating": {
+        const notDone = tasks.filter((t) => t.status !== "done");
+        if (notDone.length > 0) {
+          const ids = notDone.map((t) => `[${t.id}]`).join(", ");
+          return `Cannot advance to integrating: tasks still pending: ${ids}.`;
+        }
+        const unreviewed = tasks.filter((t) => !t.reviewStatus);
+        if (unreviewed.length > 0) {
+          const ids = unreviewed.map((t) => `[${t.id}]`).join(", ");
+          return `Cannot advance to integrating: tasks not reviewed: ${ids}. Call duo_review_submit for each.`;
+        }
+        break;
+      }
+    }
+    return null;
+  }
+  async approveTaskBoard() {
+    this.session.taskBoardApproved = true;
+    await this.save();
+  }
+  isTaskBoardApproved() {
+    return this.session.taskBoardApproved ?? false;
   }
   async setPhase(phase) {
     this.session.phase = phase;
@@ -21538,6 +21617,9 @@ function registerDocumentTools(server) {
   });
 }
 
+// dist/tools/session.js
+init_checkpoint();
+
 // dist/tools/memory.js
 import { readFile as readFile5, writeFile as writeFile4, readdir as readdir2, mkdir as mkdir5 } from "node:fs/promises";
 import { existsSync as existsSync5 } from "node:fs";
@@ -22037,6 +22119,34 @@ function registerSessionTools(server) {
     }
     const phase = state.getPhase();
     const tasks = state.getTasks();
+    const design = state.getDesign();
+    let checkpointSection = [];
+    if (isExisting) {
+      try {
+        const { readLatestCheckpoint: readLatestCheckpoint2 } = await Promise.resolve().then(() => (init_checkpoint(), checkpoint_exports));
+        const checkpoint = await readLatestCheckpoint2(state.getStateDir());
+        if (checkpoint) {
+          checkpointSection = [
+            "",
+            `\u{1F516} **Last checkpoint:** ${checkpoint.timestamp}`,
+            checkpoint.context ? `   Context: ${checkpoint.context}` : ""
+          ].filter(Boolean);
+        }
+      } catch {
+      }
+    }
+    const designSection = [];
+    if (isExisting && design) {
+      const designPreview = design.agreedDesign.slice(0, 600);
+      designSection.push("", "\u{1F4DD} **Design (from this session):**", `Task: ${design.taskDescription}`, "", designPreview + (design.agreedDesign.length > 600 ? "\n... (see .duo/design.md for full)" : ""));
+      if (design.decisions.length > 0) {
+        designSection.push("", "Key decisions:", ...design.decisions.map((d) => `  - ${d}`));
+      }
+    }
+    const taskBoardSection = [];
+    if (isExisting && tasks.length > 0) {
+      taskBoardSection.push("", state.formatTaskBoard());
+    }
     const maxCodebaseChars = 1500;
     const codebaseSection = isNewCodebase ? [
       "",
@@ -22049,6 +22159,14 @@ function registerSessionTools(server) {
       codebaseKnowledge.length > maxCodebaseChars ? codebaseKnowledge.slice(0, maxCodebaseChars) + "\n... (see .duo/CODEBASE.md for full)" : codebaseKnowledge,
       "```"
     ];
+    const phaseNextSteps = {
+      design: "REQUIRED NEXT: Continue design discussion, then call duo_design_save.",
+      planning: "REQUIRED NEXT: Call duo_task_add_bulk with task breakdown, present board to human, then duo_approve_task_board.",
+      executing: "REQUIRED NEXT: (1) Check sub-agent statuses via duo_subagent_read_result. (2) Stay available for human. (3) Continue from where you left off.",
+      reviewing: "REQUIRED NEXT: Continue cross-review. Call duo_review_start / duo_review_submit for each pending task.",
+      integrating: "REQUIRED NEXT: Run tests, fix failures, commit, then duo_codebase_update + duo_session_end."
+    };
+    const resumeNextStep = phase !== "idle" ? phaseNextSteps[phase] ?? "" : "";
     const msg = isExisting ? [
       "\u{1F504} Duo session resumed!",
       "",
@@ -22057,7 +22175,12 @@ function registerSessionTools(server) {
       `Tasks: ${tasks.length} (${tasks.filter((t) => t.status === "done").length} done)`,
       dashboardUrl ? `
 \u{1F4CA} Dashboard: ${dashboardUrl}` : "",
-      ...codebaseSection
+      ...checkpointSection,
+      ...designSection,
+      ...taskBoardSection,
+      ...codebaseSection,
+      resumeNextStep ? "" : "",
+      resumeNextStep
     ] : [
       "\u{1F3AF} Duo session started!",
       "",
@@ -22123,27 +22246,85 @@ function registerSessionTools(server) {
         ]
       };
     }
+    const gateError = state.checkPhaseGate(phase);
+    if (gateError) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: ["\u{1F6AB} Phase transition blocked:", "", gateError].join("\n")
+          }
+        ],
+        isError: true
+      };
+    }
     await state.setPhase(phase);
     try {
       await state.checkpoint(`Phase transition to ${phase}`);
     } catch {
     }
     await state.logChat("system", "event", `Phase advanced to ${phase}`);
-    const phaseMessages = {
-      design: "\u{1F3A8} Design phase \u2014 Let's discuss the approach.",
-      planning: "\u{1F4CB} Planning phase \u2014 Breaking down tasks and assigning work.",
-      executing: "\u26A1 Execution phase \u2014 Time to code! I'll work on my tasks, you work on yours.",
-      reviewing: "\u{1F50D} Review phase \u2014 Cross-reviewing each other's code.",
-      integrating: "\u{1F517} Integration phase \u2014 Merging, testing, and committing.",
-      idle: "\u2705 Session complete!"
+    const phaseInfo = {
+      design: {
+        message: "\u{1F3A8} Design phase \u2014 Discussing approach.",
+        next: "REQUIRED NEXT: Reach consensus on design, then call duo_design_save."
+      },
+      planning: {
+        message: "\u{1F4CB} Planning phase \u2014 Breaking down the task.",
+        next: "REQUIRED NEXT: Call duo_task_add_bulk with the full task breakdown. Both human and AI must have tasks. Then present the board and wait for human approval before calling duo_approve_task_board."
+      },
+      executing: {
+        message: "\u26A1 Execution phase \u2014 Time to build!",
+        next: "REQUIRED NEXT: (1) Tell human to start their tasks in their IDE. (2) Spawn subagents for each AI task via duo_subagent_spawn. (3) Keep this thread free for human check-ins. Do NOT block waiting for subagents."
+      },
+      reviewing: {
+        message: "\u{1F50D} Review phase \u2014 Cross-reviewing code.",
+        next: "REQUIRED NEXT: For each task call duo_review_start then duo_review_submit. Human reviews AI code, AI reviews human code."
+      },
+      integrating: {
+        message: "\u{1F517} Integration phase \u2014 Final steps.",
+        next: "REQUIRED NEXT: (1) Run tests. (2) Fix failures. (3) Commit. (4) Call duo_codebase_update with session learnings. (5) Call duo_session_end."
+      },
+      idle: {
+        message: "\u2705 Session complete!",
+        next: "Start a new session with duo_session_start when ready."
+      }
     };
+    const info = phaseInfo[phase] ?? { message: `Phase: ${phase}`, next: "" };
     return {
       content: [
         {
           type: "text",
-          text: phaseMessages[phase] ?? `Phase set to: ${phase}`
+          text: [info.message, "", info.next].join("\n")
         }
       ]
+    };
+  });
+  server.tool("duo_approve_task_board", "Record that the human has approved the task board. REQUIRED before advancing to executing phase. Call this after the human confirms the task breakdown.", {}, async () => {
+    const state = await getStateInstanceAutoLoad();
+    if (!state) {
+      return { content: [{ type: "text", text: "No active Duo session." }] };
+    }
+    const tasks = state.getTasks();
+    if (tasks.length === 0) {
+      return {
+        content: [{ type: "text", text: "Cannot approve: task board is empty. Add tasks first with duo_task_add_bulk." }],
+        isError: true
+      };
+    }
+    await state.approveTaskBoard();
+    const human = tasks.filter((t) => t.assignee === "human").length;
+    const ai = tasks.filter((t) => t.assignee === "ai").length;
+    return {
+      content: [{
+        type: "text",
+        text: [
+          "\u2705 Task board approved!",
+          `\u{1F9D1} Human: ${human} tasks  \u{1F916} AI: ${ai} tasks`,
+          "",
+          "REQUIRED NEXT: Call duo_phase_advance with phase='executing' to begin."
+        ].join("\n")
+      }]
     };
   });
   server.tool("duo_design_save", "Save the agreed design document after the design discussion phase.", {
@@ -22201,10 +22382,88 @@ Doc: ${filename}`;
             `Deferred: ${deferredItems.length}`,
             docNote,
             "",
-            "Ready to move to planning phase."
+            "REQUIRED NEXT: Call duo_phase_advance with phase='planning', then call duo_task_add_bulk."
           ].join("\n")
         }
       ]
+    };
+  });
+  server.tool("duo_orient", "Re-orient yourself after a context gap, compaction, or confusion. Returns full session state: phase, design, task board, last checkpoint, and required next step. Call this BEFORE responding whenever you feel lost or unsure of current state.", {}, async () => {
+    const state = await getStateInstanceAutoLoad();
+    if (!state) {
+      return {
+        content: [{
+          type: "text",
+          text: "No active Duo session. Use duo_session_start to begin."
+        }]
+      };
+    }
+    const session = state.getSession();
+    const tasks = state.getTasks();
+    const design = state.getDesign();
+    const done = tasks.filter((t) => t.status === "done").length;
+    const inProgress = tasks.filter((t) => t.status === "in_progress");
+    const pending = tasks.filter((t) => t.status === "todo");
+    const lines = [
+      "\u2501\u2501\u2501 DUO ORIENTATION \u2501\u2501\u2501",
+      `Phase: ${session.phase}`,
+      `Project: ${session.projectRoot}`,
+      `Progress: ${done}/${tasks.length} tasks done`,
+      `Board approved: ${state.isTaskBoardApproved() ? "\u2705" : "\u274C"}`
+    ];
+    if (design) {
+      lines.push("", "\u{1F4DD} DESIGN:", `  Task: ${design.taskDescription}`);
+      const preview = design.agreedDesign.slice(0, 400);
+      lines.push(`  Approach: ${preview}${design.agreedDesign.length > 400 ? "..." : ""}`);
+      if (design.decisions.length > 0) {
+        lines.push(`  Decisions:`);
+        for (const d of design.decisions)
+          lines.push(`    - ${d}`);
+      }
+    } else {
+      lines.push("", "\u{1F4DD} DESIGN: not saved yet");
+    }
+    if (tasks.length > 0) {
+      lines.push("", state.formatTaskBoard());
+    } else {
+      lines.push("", "\u{1F4CB} TASKS: none yet");
+    }
+    if (inProgress.length > 0) {
+      lines.push("", "\u{1F535} IN PROGRESS:");
+      for (const t of inProgress) {
+        lines.push(`  [${t.id}] ${t.description} \u2192 ${t.assignee}`);
+      }
+    }
+    const subagents = state.getSubagents();
+    if (subagents.length > 0) {
+      lines.push("", "\u{1F916} SUB-AGENTS:");
+      for (const s of subagents) {
+        lines.push(`  [${s.taskId}] status=${s.status} spawned=${s.spawnedAt}`);
+      }
+    }
+    try {
+      const { readLatestCheckpoint: readLatestCheckpoint2 } = await Promise.resolve().then(() => (init_checkpoint(), checkpoint_exports));
+      const checkpoint = await readLatestCheckpoint2(state.getStateDir());
+      if (checkpoint) {
+        lines.push("", `\u{1F516} LAST CHECKPOINT: ${checkpoint.timestamp}`);
+        if (checkpoint.context)
+          lines.push(`   Context: ${checkpoint.context}`);
+      }
+    } catch {
+    }
+    const phaseNextSteps = {
+      design: "REQUIRED NEXT: Continue design discussion, then call duo_design_save.",
+      planning: "REQUIRED NEXT: Call duo_task_add_bulk with task breakdown, present board to human, then duo_approve_task_board.",
+      executing: "REQUIRED NEXT: (1) Check pending sub-agent results via duo_subagent_read_result. (2) Stay available for human. (3) Continue work from where you left off.",
+      reviewing: "REQUIRED NEXT: Continue cross-review. Call duo_review_start / duo_review_submit for each pending task.",
+      integrating: "REQUIRED NEXT: Run tests, fix failures, commit, then duo_codebase_update + duo_session_end.",
+      idle: "No active session work. Use duo_session_start to begin."
+    };
+    const nextStep = phaseNextSteps[session.phase] ?? "Proceed with current phase work.";
+    lines.push("", `\u23ED\uFE0F  ${nextStep}`);
+    lines.push("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501");
+    return {
+      content: [{ type: "text", text: lines.join("\n") }]
     };
   });
   server.tool("duo_session_end", "End the current Duo session. Shows collected discoveries and prompts for CODEBASE.md updates.", {
@@ -22360,7 +22619,12 @@ function registerTaskTools(server) {
           text: [
             `\u2705 Added ${taskList.length} tasks`,
             "",
-            state.formatTaskBoard()
+            state.formatTaskBoard(),
+            "",
+            "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501",
+            "REQUIRED NEXT: Present this task board to the human.",
+            "Ask: 'Swap any tasks? Or good to go?'",
+            "After their confirmation, call duo_approve_task_board."
           ].join("\n")
         }
       ]
@@ -22809,6 +23073,7 @@ function registerSubagentTools(server) {
 }
 
 // dist/tools/recover.js
+init_checkpoint();
 function registerRecoverTools(server) {
   server.tool("duo_recover_session", "Recover a Duo session from the most recent memory checkpoint. Auto-detects checkpoints in .duo/memory/. Use this after a crash or context loss.", {}, async () => {
     const state = await getStateInstanceAutoLoad();
@@ -23028,6 +23293,104 @@ ${formattedResults}`
   });
 }
 
+// dist/tools/snapshot.js
+function registerSnapshotTools(server) {
+  server.tool("duo_context_snapshot", "Get a compact snapshot of the current session state (~500 tokens). Use this when context is large, or to give subagents session context without passing full history.", {}, async () => {
+    const state = await getStateInstanceAutoLoad();
+    if (!state) {
+      return {
+        content: [{ type: "text", text: "No active Duo session. Use duo_session_start to begin." }]
+      };
+    }
+    const session = state.getSession();
+    const tasks = state.getTasks();
+    const design = state.getDesign();
+    const done = tasks.filter((t) => t.status === "done").length;
+    const inProgress = tasks.filter((t) => t.status === "in_progress");
+    const pending = tasks.filter((t) => t.status === "todo");
+    const lines = [
+      "\u2501\u2501\u2501 DUO CONTEXT SNAPSHOT \u2501\u2501\u2501",
+      `Phase: ${session.phase}`,
+      `Project: ${session.projectRoot}`,
+      `Progress: ${done}/${tasks.length} tasks done`,
+      `Board approved: ${state.isTaskBoardApproved() ? "\u2705" : "\u274C"}`,
+      ""
+    ];
+    if (design) {
+      lines.push(`Design: ${design.taskDescription}`);
+      const preview = design.agreedDesign.slice(0, 300);
+      lines.push(`Approach: ${preview}${design.agreedDesign.length > 300 ? "..." : ""}`);
+      if (design.decisions.length > 0) {
+        lines.push(`Decisions: ${design.decisions.slice(0, 3).join(" | ")}`);
+      }
+      lines.push("");
+    }
+    if (inProgress.length > 0) {
+      lines.push("In progress:");
+      for (const t of inProgress) {
+        lines.push(`  \u{1F535} [${t.id}] ${t.description} \u2192 ${t.assignee}`);
+      }
+      lines.push("");
+    }
+    if (pending.length > 0) {
+      lines.push("Pending:");
+      for (const t of pending) {
+        lines.push(`  \u2B1C [${t.id}] ${t.description} \u2192 ${t.assignee}`);
+      }
+      lines.push("");
+    }
+    const doneTasks = tasks.filter((t) => t.status === "done");
+    if (doneTasks.length > 0) {
+      lines.push(`Done: ${doneTasks.map((t) => `[${t.id}]`).join(", ")}`);
+    }
+    lines.push("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501");
+    return {
+      content: [{ type: "text", text: lines.join("\n") }]
+    };
+  });
+  server.tool("duo_codebase_update", "Update CODEBASE.md with knowledge gained this session. REQUIRED at the end of every session before duo_session_end. Documents architecture, patterns, decisions, and gotchas for future sessions.", {
+    sessionSummary: external_exports.string().describe("What was built/changed this session (2-3 sentences)"),
+    architectureNotes: external_exports.array(external_exports.string()).describe("Architecture facts \u2014 module responsibilities, key patterns, data flow").default([]),
+    keyDecisions: external_exports.array(external_exports.string()).describe("Decisions made and why \u2014 important for future context").default([]),
+    gotchas: external_exports.array(external_exports.string()).describe("Non-obvious things that will trip up future work \u2014 edge cases, footguns, constraints").default([]),
+    files: external_exports.array(external_exports.object({ path: external_exports.string(), purpose: external_exports.string() })).describe("Key files changed and what they do").default([])
+  }, async ({ sessionSummary, architectureNotes, keyDecisions, gotchas, files }) => {
+    const state = await getStateInstanceAutoLoad();
+    if (!state) {
+      return {
+        content: [{ type: "text", text: "No active Duo session." }]
+      };
+    }
+    const stateDir = state.getStateDir();
+    const allGotchas = [...gotchas];
+    if (keyDecisions.length > 0) {
+      allGotchas.push(...keyDecisions.map((d) => `Decision: ${d}`));
+    }
+    const codebasePath = await appendCodebaseKnowledge(stateDir, {
+      architecture: [sessionSummary, ...architectureNotes].join("\n"),
+      files,
+      gotchas: allGotchas
+    });
+    return {
+      content: [{
+        type: "text",
+        text: [
+          "\u{1F4DD} CODEBASE.md updated!",
+          `File: ${codebasePath}`,
+          "",
+          `Architecture notes: ${architectureNotes.length}`,
+          `Key decisions: ${keyDecisions.length}`,
+          `Gotchas: ${gotchas.length}`,
+          `Files documented: ${files.length}`,
+          "",
+          "CODEBASE.md will be loaded automatically in future Duo sessions.",
+          "REQUIRED NEXT: Call duo_session_end to close the session."
+        ].join("\n")
+      }]
+    };
+  });
+}
+
 // dist/tools/index.js
 function registerTools(server) {
   registerSessionTools(server);
@@ -23039,6 +23402,7 @@ function registerTools(server) {
   registerSearchTools(server);
   registerMemoryTools(server);
   registerDiscoveryTools(server);
+  registerSnapshotTools(server);
 }
 
 // dist/index.js

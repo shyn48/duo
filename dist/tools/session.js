@@ -66,6 +66,39 @@ export function registerSessionTools(server) {
         }
         const phase = state.getPhase();
         const tasks = state.getTasks();
+        const design = state.getDesign();
+        // Load latest checkpoint for resume context
+        let checkpointSection = [];
+        if (isExisting) {
+            try {
+                const { readLatestCheckpoint } = await import("../memory/checkpoint.js");
+                const checkpoint = await readLatestCheckpoint(state.getStateDir());
+                if (checkpoint) {
+                    checkpointSection = [
+                        "",
+                        `🔖 **Last checkpoint:** ${checkpoint.timestamp}`,
+                        checkpoint.context ? `   Context: ${checkpoint.context}` : "",
+                    ].filter(Boolean);
+                }
+            }
+            catch {
+                // Non-critical
+            }
+        }
+        // Build design section for resumed sessions
+        const designSection = [];
+        if (isExisting && design) {
+            const designPreview = design.agreedDesign.slice(0, 600);
+            designSection.push("", "📝 **Design (from this session):**", `Task: ${design.taskDescription}`, "", designPreview + (design.agreedDesign.length > 600 ? "\n... (see .duo/design.md for full)" : ""));
+            if (design.decisions.length > 0) {
+                designSection.push("", "Key decisions:", ...design.decisions.map((d) => `  - ${d}`));
+            }
+        }
+        // Build task board section for resumed sessions
+        const taskBoardSection = [];
+        if (isExisting && tasks.length > 0) {
+            taskBoardSection.push("", state.formatTaskBoard());
+        }
         // Build codebase context section (truncate if large)
         const maxCodebaseChars = 1500;
         const codebaseSection = isNewCodebase
@@ -83,6 +116,15 @@ export function registerSessionTools(server) {
                     : codebaseKnowledge,
                 "```",
             ];
+        // Build required-next guidance for resumed sessions
+        const phaseNextSteps = {
+            design: "REQUIRED NEXT: Continue design discussion, then call duo_design_save.",
+            planning: "REQUIRED NEXT: Call duo_task_add_bulk with task breakdown, present board to human, then duo_approve_task_board.",
+            executing: "REQUIRED NEXT: (1) Check sub-agent statuses via duo_subagent_read_result. (2) Stay available for human. (3) Continue from where you left off.",
+            reviewing: "REQUIRED NEXT: Continue cross-review. Call duo_review_start / duo_review_submit for each pending task.",
+            integrating: "REQUIRED NEXT: Run tests, fix failures, commit, then duo_codebase_update + duo_session_end.",
+        };
+        const resumeNextStep = phase !== "idle" ? phaseNextSteps[phase] ?? "" : "";
         const msg = isExisting
             ? [
                 "🔄 Duo session resumed!",
@@ -91,7 +133,12 @@ export function registerSessionTools(server) {
                 `Phase: ${phase}`,
                 `Tasks: ${tasks.length} (${tasks.filter(t => t.status === "done").length} done)`,
                 dashboardUrl ? `\n📊 Dashboard: ${dashboardUrl}` : "",
+                ...checkpointSection,
+                ...designSection,
+                ...taskBoardSection,
                 ...codebaseSection,
+                resumeNextStep ? "" : "",
+                resumeNextStep,
             ]
             : [
                 "🎯 Duo session started!",
@@ -321,6 +368,95 @@ export function registerSessionTools(server) {
                     ].join("\n"),
                 },
             ],
+        };
+    });
+    // ── Orient (re-sync after context loss) ──
+    server.tool("duo_orient", "Re-orient yourself after a context gap, compaction, or confusion. Returns full session state: phase, design, task board, last checkpoint, and required next step. Call this BEFORE responding whenever you feel lost or unsure of current state.", {}, async () => {
+        const state = await getStateInstanceAutoLoad();
+        if (!state) {
+            return {
+                content: [{
+                        type: "text",
+                        text: "No active Duo session. Use duo_session_start to begin.",
+                    }],
+            };
+        }
+        const session = state.getSession();
+        const tasks = state.getTasks();
+        const design = state.getDesign();
+        const done = tasks.filter((t) => t.status === "done").length;
+        const inProgress = tasks.filter((t) => t.status === "in_progress");
+        const pending = tasks.filter((t) => t.status === "todo");
+        const lines = [
+            "━━━ DUO ORIENTATION ━━━",
+            `Phase: ${session.phase}`,
+            `Project: ${session.projectRoot}`,
+            `Progress: ${done}/${tasks.length} tasks done`,
+            `Board approved: ${state.isTaskBoardApproved() ? "✅" : "❌"}`,
+        ];
+        // Design
+        if (design) {
+            lines.push("", "📝 DESIGN:", `  Task: ${design.taskDescription}`);
+            const preview = design.agreedDesign.slice(0, 400);
+            lines.push(`  Approach: ${preview}${design.agreedDesign.length > 400 ? "..." : ""}`);
+            if (design.decisions.length > 0) {
+                lines.push(`  Decisions:`);
+                for (const d of design.decisions)
+                    lines.push(`    - ${d}`);
+            }
+        }
+        else {
+            lines.push("", "📝 DESIGN: not saved yet");
+        }
+        // Task board
+        if (tasks.length > 0) {
+            lines.push("", state.formatTaskBoard());
+        }
+        else {
+            lines.push("", "📋 TASKS: none yet");
+        }
+        // In-progress / pending detail
+        if (inProgress.length > 0) {
+            lines.push("", "🔵 IN PROGRESS:");
+            for (const t of inProgress) {
+                lines.push(`  [${t.id}] ${t.description} → ${t.assignee}`);
+            }
+        }
+        // Sub-agents
+        const subagents = state.getSubagents();
+        if (subagents.length > 0) {
+            lines.push("", "🤖 SUB-AGENTS:");
+            for (const s of subagents) {
+                lines.push(`  [${s.taskId}] status=${s.status} spawned=${s.spawnedAt}`);
+            }
+        }
+        // Latest checkpoint
+        try {
+            const { readLatestCheckpoint } = await import("../memory/checkpoint.js");
+            const checkpoint = await readLatestCheckpoint(state.getStateDir());
+            if (checkpoint) {
+                lines.push("", `🔖 LAST CHECKPOINT: ${checkpoint.timestamp}`);
+                if (checkpoint.context)
+                    lines.push(`   Context: ${checkpoint.context}`);
+            }
+        }
+        catch {
+            // Non-critical
+        }
+        // Required next step
+        const phaseNextSteps = {
+            design: "REQUIRED NEXT: Continue design discussion, then call duo_design_save.",
+            planning: "REQUIRED NEXT: Call duo_task_add_bulk with task breakdown, present board to human, then duo_approve_task_board.",
+            executing: "REQUIRED NEXT: (1) Check pending sub-agent results via duo_subagent_read_result. (2) Stay available for human. (3) Continue work from where you left off.",
+            reviewing: "REQUIRED NEXT: Continue cross-review. Call duo_review_start / duo_review_submit for each pending task.",
+            integrating: "REQUIRED NEXT: Run tests, fix failures, commit, then duo_codebase_update + duo_session_end.",
+            idle: "No active session work. Use duo_session_start to begin.",
+        };
+        const nextStep = phaseNextSteps[session.phase] ?? "Proceed with current phase work.";
+        lines.push("", `⏭️  ${nextStep}`);
+        lines.push("━━━━━━━━━━━━━━━━━━━━━━━━");
+        return {
+            content: [{ type: "text", text: lines.join("\n") }],
         };
     });
     // ── End session ──

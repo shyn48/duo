@@ -12,225 +12,139 @@ description: Collaborative pair programming workflow that splits coding tasks be
 3. **Enjoyability** — Human codes the interesting parts, AI handles the tedious parts
 4. **Speed** — Parallel execution keeps delivery fast despite human involvement
 
----
-
-## ⚠️ Non-Negotiable Rules
-
-These rules override everything else:
-
-1. **Always use MCP tools.** Every phase transition, task operation, and state change MUST go through a tool call. Never fake state changes in conversation.
-2. **Never skip phases.** Design → Plan → Execute → Review → Integrate. No shortcuts unless human explicitly says to skip.
-3. **Tool responses contain your next action.** When a tool responds with "REQUIRED NEXT:", you MUST do that next — no deviation.
-4. **Never start executing before task board is approved.** `duo_approve_task_board` must be called first.
-5. **Never end without updating CODEBASE.md.** `duo_codebase_update` is mandatory before `duo_session_end`.
-
----
-
 ## Workflow
 
-### Phase 0: Session Start
-
-**Tool calls (in order, no exceptions):**
-```
-1. duo_session_start(projectRoot: "/absolute/path/to/project")
-2. duo_codebase_read(projectRoot: "/absolute/path/to/project")
-```
-
-Then: ask the human to describe the task.
-
----
+Follow these phases in order. Do not skip phases unless the human explicitly asks.
 
 ### Phase 1: Design
 
-**Goal:** Reach a shared, written understanding of what will be built and how.
-
 1. Ask the human to describe the task
-2. Ask: "Do you have a design or approach in mind?"
-   - If yes → review their design. Challenge weak points respectfully. See [references/design-phase.md](references/design-phase.md)
-   - If no → propose a design, ask for critique
-3. Go back and forth until both agree
-4. Summarize the agreed design out loud
-
-**Tool call (required to leave this phase):**
-```
-duo_design_save(
-  taskDescription: "...",
-  agreedDesign: "...",
-  decisions: [...],
-  deferredItems: [...]
-)
-```
-
-Then: `duo_phase_advance(phase: "planning")`
+2. Ask if they have a design or approach in mind
+3. If yes → review their design. See [references/design-phase.md](references/design-phase.md) for challenge patterns
+4. If no → propose a design, ask for critique
+5. Go back and forth until consensus
+6. Summarize the agreed design before moving on
 
 **Key behavior:** Challenge respectfully. Don't rubber-stamp. But accept when the human has good reasons.
 
----
-
 ### Phase 2: Plan
 
-**Goal:** A concrete, approved task board where both parties know exactly what they're building.
-
-1. Read relevant codebase files to understand existing patterns
+1. Analyze the codebase (read relevant files, understand existing patterns)
 2. Break the task into discrete subtasks
-3. Classify each subtask (see [references/task-classify.md](references/task-classify.md)):
-   - Human gets: core business logic, architecture decisions, security-sensitive code, anything where understanding matters
-   - AI gets: boilerplate, repetitive patterns, tests for AI-written code, scaffolding
+3. Classify each subtask. See [references/task-classify.md](references/task-classify.md) for heuristics
+4. Present the task board:
 
-**Tool call:**
 ```
-duo_task_add_bulk(tasks: [
-  { id: "1", description: "...", assignee: "human", files: [...] },
-  { id: "2", description: "...", assignee: "ai", files: [...] },
-  ...
-])
-```
+📋 Task Board — [Task Name]
 
-4. Present the task board to the human. Ask: **"Swap any tasks? Or good to go?"**
-5. Process any swaps via `duo_task_reassign(id, assignee)`
-6. When human approves:
+🧑 YOU:
+  1. [description] — files: [list]
+  2. [description] — files: [list]
 
-**Tool call (required to leave this phase):**
-```
-duo_approve_task_board()
+🤖 ME:
+  3. [description] — files: [list]
+  4. [description] — files: [list]
+
+Swap any tasks? Or good to go?
 ```
 
-Then: `duo_phase_advance(phase: "executing")`
+5. Human reviews and can swap assignments
+6. Confirm before execution begins
 
-**Important:** The human must have at least one meaningful task. Don't give them only trivial work.
-
----
+**Important:** Assign the human tasks where understanding the code matters most. They should walk away knowing the critical parts of the codebase, not just the easy parts.
 
 ### Phase 3: Execute
 
-**Goal:** Both parties build their tasks in parallel. Main thread stays free for human interaction.
+1. Initialize task state: run `scripts/task-board.sh init` in the project directory
+2. Add all tasks: `scripts/task-board.sh add <id> <assignee> "<description>"`
+3. Spawn subagent(s) for AI-assigned tasks via `sessions_spawn`. See [references/orchestration.md](references/orchestration.md) for:
+   - Sub-agent task prompt template
+   - How to review and integrate sub-agent results
+   - Context management to avoid overflow
+   - Main thread stays free for human interaction
+4. Tell the human to start their tasks in their IDE
+5. As sub-agents complete, review their code incrementally (don't wait for all to finish)
+6. Respond to human signals:
+   - **"done with task N"** → update board, read their changes, move to review
+   - **"stuck on task N"** → help with escalating approach:
+     1. Ask what specifically they're stuck on
+     2. Give a conceptual hint (not code)
+     3. Show pseudocode or a pattern reference
+     4. Only if explicitly asked: provide implementation
+     5. Ask if they want to keep the task or hand it off
+   - **"swap task N to me/you"** → reassign: `scripts/task-board.sh assign <id> <assignee>`
+   - **"status"** → run `scripts/task-board.sh show`
+7. When subagent completes, review its output, then notify:
+   "🤖 Task N done — I've reviewed the code. Ready for your review when you are."
+8. When all AI tasks are done, integrate results into unified "AI code" before presenting to human
 
-**Immediately after advancing to executing:**
-
-1. Tell the human: "Go ahead and start your tasks in your IDE. I'm starting mine now."
-2. For each AI task, spawn a subagent (see [references/orchestration.md](references/orchestration.md)):
-   - Each subagent gets: task description, relevant files, design doc, CODEBASE.md context
-   - Use `duo_context_snapshot()` to give subagents compact session context
-3. Mark AI tasks in progress: `duo_task_update(id, "in_progress")`
-4. **Keep this thread free** — do not block on subagents
-
-**Responding to human signals:**
-- `"done with task N"` → `duo_task_update(N, "review")`, read their changes, move to review for that task
-- `"stuck on task N"` → escalating help (hint → pseudocode → implementation, only if asked). Use `duo_help_request(taskId, question, escalationLevel)`
-- `"swap task N to me/you"` → `duo_task_reassign(N, assignee)`
-- `"status"` → `duo_task_board()` or `duo_session_status()`
-
-**When a subagent completes:**
-1. Review its output (you're the tech lead, not a passthrough)
-2. `duo_task_update(taskId, "done")`
-3. Notify human: "🤖 Task [N] done — I've reviewed the code. Ready for your review when you are."
-
-**Never rush the human.** They code at their own pace.
-
----
+**Never rush the human.** They code at their pace. Never take over unless asked.
+**Review sub-agent code before showing to human.** You're the tech lead, not a passthrough.
 
 ### Phase 4: Review
 
-**Goal:** Both parties understand ALL the code — not just what they wrote.
+Cross-review is critical. This is where code quality and understanding happen.
 
-`duo_phase_advance(phase: "reviewing")`
+1. **Human reviews AI code:**
+   - Show what changed (files, key code blocks, decisions made)
+   - Ask specific questions: "Does this pattern match your expectations?"
+   - Human must understand the AI code — quiz gently if needed
+   
+2. **AI reviews human code:**
+   - Read changed files
+   - See [references/review-phase.md](references/review-phase.md) for review patterns
+   - Flag real issues, praise good solutions
+   - Don't nitpick style
 
-For each completed task:
+3. Iterate until both approve
 
-```
-duo_review_start(taskId: "N")
-```
-
-**Human reviews AI code:**
-- Show what changed (files, key blocks, decisions)
-- Ask: "Does this pattern match your expectations?"
-- Quiz gently to confirm understanding — "walk me through what this function does"
-
-**AI reviews human code:**
-- Read changed files
-- See [references/review-phase.md](references/review-phase.md)
-- Flag real issues, don't nitpick style
-
-When review is complete:
-```
-duo_review_submit(taskId: "N", approved: true/false, feedback: "...")
-```
-
-Iterate until both approve. Then `duo_phase_advance(phase: "integrating")`.
-
----
+**Key principle:** After review, the human should understand 100% of the changes — theirs AND the AI's. This is the "codebase understanding" goal in action.
 
 ### Phase 5: Integrate
 
-**Goal:** Clean, tested, committed code with updated codebase knowledge.
-
-1. Run full test suite, report results to human
-2. Fix any failures collaboratively
-3. Commit with a descriptive message
-4. **REQUIRED — update codebase knowledge:**
-
-```
-duo_codebase_update(
-  projectRoot: "...",
-  sessionSummary: "...",
-  architectureNotes: [...],
-  keyDecisions: [...],
-  gotchas: [...],
-  fileMap: [{ file: "...", purpose: "..." }, ...]
-)
-```
-
-5. Close session:
-```
-duo_session_end()
-```
-
----
-
-## Context Management (Token Efficiency)
-
-Long sessions will overflow context. To keep things manageable:
-
-1. **Subagents get snapshots, not history.** Always pass `duo_context_snapshot()` output to subagents, not the full conversation.
-2. **When context feels large**, call `duo_context_snapshot()` and use that as your anchor instead of scrolling back.
-3. **Don't load all codebase files.** Read only files relevant to the current task. CODEBASE.md is your index — use it.
-4. **Subagent scope:** Each subagent handles ONE task. Narrow scope = smaller context.
-
----
+1. Ensure all code is committed
+2. Run full test suite, report results
+3. If tests fail → figure out whose code caused it, fix collaboratively
+4. Final commit with descriptive message crediting the collaborative work
 
 ## State Management
 
-All state lives in `.duo/` via MCP tools. Never fake state in conversation text.
+Task state in `.duo/tasks.json`. Managed via `scripts/task-board.sh`:
+- `init` — create .duo directory and empty board
+- `add <id> <assignee> <description>` — add task (assignee: human|ai)
+- `update <id> <status>` — set status (todo|in_progress|review|done)
+- `assign <id> <assignee>` — reassign task
+- `show` — display current board
+- `clear` — remove .duo directory
 
-| Tool | When to call |
-|------|-------------|
-| `duo_session_start` | First thing, always |
-| `duo_codebase_read` | Right after session start |
-| `duo_design_save` | After design consensus |
-| `duo_phase_advance` | At every phase transition |
-| `duo_task_add_bulk` | Once during planning |
-| `duo_approve_task_board` | After human confirms task board |
-| `duo_task_update` | When task status changes |
-| `duo_task_reassign` | When human swaps a task |
-| `duo_help_request` | When human is stuck |
-| `duo_review_start` | Before reviewing each task |
-| `duo_review_submit` | After reviewing each task |
-| `duo_integrate` | Start of integrate phase |
-| `duo_codebase_update` | Before ending session |
-| `duo_session_end` | Last thing, always |
-| `duo_context_snapshot` | When context is large; for subagent prompts |
-| `duo_session_status` | When human asks for status |
+## Flow Discipline (mandatory)
 
----
+These rules keep the session on-track. No exceptions.
 
-## Anti-Patterns (never do these)
+### Session Start / Resume
+1. **Always call `duo_session_start` first** — do not respond to the human before this completes.
+2. If the response says "Session resumed" → the design and task board are in the response. Read them before saying anything.
+3. If you feel disoriented for any reason (context loss, compaction, long gap) → **call `duo_orient` BEFORE responding**. No exceptions.
+
+### During a Session
+- **"REQUIRED NEXT" in any tool response is a hard mandate.** Execute it on your next turn. Do not skip, defer, or reorder it.
+- Before each response, ask: "Am I in phase `[current phase]`? Does what I'm about to do match what's required in this phase?" If unsure → call `duo_orient`.
+- If you notice you've been doing work not on the task board → STOP, call `duo_orient`, re-sync.
+- Do not do AI-assigned task work inline. Sub-agents do AI tasks. Mother agent orchestrates.
+
+### After Context Loss / Compaction
+1. Call `duo_orient` immediately.
+2. Read the output fully before responding.
+3. Pick up exactly from the REQUIRED NEXT step shown.
+
+## Anti-Patterns (avoid these)
 
 - ❌ Rubber-stamping human's design without challenge
 - ❌ Assigning human only easy/trivial tasks
-- ❌ Advancing phase without calling the required tool
 - ❌ Jumping to code when human says "stuck" (hints first!)
-- ❌ Ending the session without calling `duo_codebase_update`
 - ❌ Rushing the human or showing impatience
 - ❌ Letting human skip reviewing AI code ("looks fine" is not a review)
-- ❌ Passing full conversation history to subagents (use `duo_context_snapshot`)
-- ❌ Using shell scripts instead of MCP tools for state management
+- ❌ Over-engineering the plan for small tasks
+- ❌ Responding after session resume without reading the design + task board in the response
+- ❌ Doing AI task work inline instead of spawning sub-agents
+- ❌ Ignoring "REQUIRED NEXT" directives in tool responses
