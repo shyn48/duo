@@ -23054,7 +23054,8 @@ function registerSessionTools(server) {
       },
       executing: {
         message: "\u26A1 Execution phase \u2014 Time to build!",
-        next: "REQUIRED NEXT: (1) Tell human to start their tasks in their IDE. (2) Spawn subagents for each AI task via duo_subagent_spawn. (3) Keep this thread free for human check-ins. Do NOT block waiting for subagents."
+        next: "__EXECUTING_NEXT__"
+        // replaced below with per-task spawn instructions
       },
       reviewing: {
         message: "\u{1F50D} Review phase \u2014 Cross-reviewing code.",
@@ -23069,7 +23070,33 @@ function registerSessionTools(server) {
         next: "Start a new session with duo_session_start when ready."
       }
     };
-    const info = phaseInfo[phase] ?? { message: `Phase: ${phase}`, next: "" };
+    let info = phaseInfo[phase] ?? { message: `Phase: ${phase}`, next: "" };
+    if (phase === "executing") {
+      const tasks = state.getTasks();
+      const aiTasks = tasks.filter((t) => t.assignee === "ai" && t.status === "todo");
+      const spawnLines = [
+        "REQUIRED NEXT \u2014 execute ALL steps in order:",
+        "",
+        "Step 1: Tell the human to start their tasks in their IDE.",
+        "",
+        "Step 2: Spawn a sub-agent for EACH AI task listed below.",
+        "  For each, call duo_subagent_spawn(taskId, description, prompt, files).",
+        "  Then immediately call sessions_spawn with the returned subagentPrompt.",
+        "  Do not skip any AI task.",
+        ""
+      ];
+      if (aiTasks.length === 0) {
+        spawnLines.push("  (No AI tasks pending \u2014 all may already be spawned or done)");
+      } else {
+        spawnLines.push("  AI tasks to spawn NOW:");
+        for (const t of aiTasks) {
+          const fileHint = t.files.length > 0 ? ` [${t.files.join(", ")}]` : "";
+          spawnLines.push(`    \u{1F916} [${t.id}] ${t.description}${fileHint}`);
+        }
+      }
+      spawnLines.push("", "Step 3: After spawning all sub-agents, stay available for the human.", "  When a sub-agent completes, call duo_subagent_read_result(taskId) to retrieve its output.", "  Then call duo_subagent_mark_complete(taskId, ...) to update state.", "", "Step 4: Do NOT do AI task work inline. Sub-agents do AI tasks. You orchestrate.");
+      info = { message: info.message, next: spawnLines.join("\n") };
+    }
     return {
       content: [
         {

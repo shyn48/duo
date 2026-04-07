@@ -298,7 +298,7 @@ export function registerSessionTools(server: McpServer) {
         },
         executing: {
           message: "⚡ Execution phase — Time to build!",
-          next: "REQUIRED NEXT: (1) Tell human to start their tasks in their IDE. (2) Spawn subagents for each AI task via duo_subagent_spawn. (3) Keep this thread free for human check-ins. Do NOT block waiting for subagents.",
+          next: "__EXECUTING_NEXT__", // replaced below with per-task spawn instructions
         },
         reviewing: {
           message: "🔍 Review phase — Cross-reviewing code.",
@@ -314,7 +314,45 @@ export function registerSessionTools(server: McpServer) {
         },
       };
 
-      const info = phaseInfo[phase] ?? { message: `Phase: ${phase}`, next: "" };
+      let info = phaseInfo[phase] ?? { message: `Phase: ${phase}`, next: "" };
+
+      // For executing phase: generate per-task spawn instructions
+      if (phase === "executing") {
+        const tasks = state.getTasks();
+        const aiTasks = tasks.filter((t) => t.assignee === "ai" && t.status === "todo");
+        const spawnLines: string[] = [
+          "REQUIRED NEXT — execute ALL steps in order:",
+          "",
+          "Step 1: Tell the human to start their tasks in their IDE.",
+          "",
+          "Step 2: Spawn a sub-agent for EACH AI task listed below.",
+          "  For each, call duo_subagent_spawn(taskId, description, prompt, files).",
+          "  Then immediately call sessions_spawn with the returned subagentPrompt.",
+          "  Do not skip any AI task.",
+          "",
+        ];
+
+        if (aiTasks.length === 0) {
+          spawnLines.push("  (No AI tasks pending — all may already be spawned or done)");
+        } else {
+          spawnLines.push("  AI tasks to spawn NOW:");
+          for (const t of aiTasks) {
+            const fileHint = t.files.length > 0 ? ` [${t.files.join(", ")}]` : "";
+            spawnLines.push(`    🤖 [${t.id}] ${t.description}${fileHint}`);
+          }
+        }
+
+        spawnLines.push(
+          "",
+          "Step 3: After spawning all sub-agents, stay available for the human.",
+          "  When a sub-agent completes, call duo_subagent_read_result(taskId) to retrieve its output.",
+          "  Then call duo_subagent_mark_complete(taskId, ...) to update state.",
+          "",
+          "Step 4: Do NOT do AI task work inline. Sub-agents do AI tasks. You orchestrate.",
+        );
+
+        info = { message: info.message, next: spawnLines.join("\n") };
+      }
 
       return {
         content: [
