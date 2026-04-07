@@ -46,15 +46,36 @@ INSTRUCTIONS:
    - Any questions or concerns for the orchestrator
 ```
 
+## Sub-Agent Output Contract (mandatory)
+
+Every sub-agent MUST write a result file to `.duo/subagent-results/{taskId}.md` before finishing.
+Format:
+```
+taskId: T3
+status: done
+filesChanged:
+  - internal/handler/auth.go
+  - internal/types/auth.go
+summary: |
+  Implemented JWT middleware. Added token validation in auth handler.
+issues:
+  - Wasn't sure about error code for expired tokens — used 401, check if correct
+completedAt: 2026-04-07T11:30:00Z
+```
+
+This file is the **only** communication channel from sub-agent to mother. Do not rely on conversation text for handoff.
+
 ## Receiving Sub-Agent Results
 
-When a sub-agent completes, the mother agent receives a ping. Then:
+When a sub-agent finishes:
 
-1. **Read the changed files** — don't rely solely on the sub-agent's summary
-2. **Check for conflicts** — did this sub-agent touch files another sub-agent is working on?
-3. **Check for consistency** — does the code follow project patterns? Does it align with other completed tasks?
-4. **Fix minor issues** — typos, import ordering, small inconsistencies
-5. **Flag major issues** — if something is wrong, either fix it or re-spawn the sub-agent with corrections
+1. **Call `duo_subagent_read_result(taskId)`** — reads the result file
+2. **Read the actual changed files** — don't rely solely on the sub-agent's summary
+3. **Check for conflicts** — did this sub-agent touch files another sub-agent is working on?
+4. **Check for consistency** — does the code follow project patterns? Does it align with other completed tasks?
+5. **Fix minor issues** — typos, import ordering, small inconsistencies
+6. **Flag major issues** — if something is wrong, re-spawn with corrections
+7. **Call `duo_subagent_mark_complete(taskId, ...)`** — updates state and auto-checkpoints
 
 ## Integrating Multiple Sub-Agent Results
 

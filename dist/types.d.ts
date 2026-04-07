@@ -69,6 +69,22 @@ export interface SubagentInfo {
     spawnedAt: string;
     completedAt?: string;
     prompt: string;
+    /** Path to the structured result file written by the sub-agent */
+    resultPath?: string;
+    /** Files changed by the sub-agent (populated on completion) */
+    filesChanged?: string[];
+    /** Brief summary of what the sub-agent did (populated on completion) */
+    summary?: string;
+    /** Issues or concerns raised by the sub-agent */
+    issues?: string[];
+}
+export interface SubagentResult {
+    taskId: string;
+    status: "done" | "failed" | "partial";
+    filesChanged: string[];
+    summary: string;
+    issues: string[];
+    completedAt: string;
 }
 export type DuoEvent = {
     type: "phase_changed";

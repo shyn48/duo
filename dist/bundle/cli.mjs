@@ -22038,10 +22038,10 @@ async function getStateInstanceAutoLoad() {
   const projectRoot = process.env.DUO_PROJECT_ROOT;
   if (!projectRoot)
     return null;
-  const { existsSync: existsSync9 } = await import("node:fs");
-  const { join: join11 } = await import("node:path");
-  const sessionPath = join11(projectRoot, ".duo", "session.json");
-  if (!existsSync9(sessionPath))
+  const { existsSync: existsSync10 } = await import("node:fs");
+  const { join: join12 } = await import("node:path");
+  const sessionPath = join12(projectRoot, ".duo", "session.json");
+  if (!existsSync10(sessionPath))
     return null;
   const state = new DuoState(projectRoot);
   await state.init();
@@ -23767,6 +23767,9 @@ var init_review = __esm({
 });
 
 // dist/tools/subagent.js
+import { readFile as readFile8, mkdir as mkdir6 } from "node:fs/promises";
+import { existsSync as existsSync8 } from "node:fs";
+import { join as join9 } from "node:path";
 function registerSubagentTools(server) {
   server.tool("duo_subagent_spawn", "Spawn a sub-agent for an AI-assigned task. Returns a structured prompt that the mother agent can use to spawn via whatever mechanism is available (OpenClaw sessions_spawn, Claude Code Task, etc.).", {
     taskId: external_exports.string().describe("Task ID to assign to the sub-agent"),
@@ -23841,15 +23844,21 @@ function registerSubagentTools(server) {
     if (files.length > 0) {
       contextParts.push("", "## Focus Files", ...files.map((f) => `- ${f}`));
     }
-    contextParts.push("", "## Task Instructions", prompt, "", "## Constraints", "- Stay focused on the assigned task", "- Follow the design decisions above", "- Report completion status when done");
+    const resultPath = join9(session.projectRoot, ".duo", "subagent-results", `${taskId}.md`);
+    contextParts.push("", "## Task Instructions", prompt, "", "## Constraints", "- Stay focused on the assigned task", "- Follow the design decisions above", "- Do NOT modify files outside your assigned scope", "", "## REQUIRED OUTPUT CONTRACT", `When you finish, you MUST write your results to: ${resultPath}`, "Use exactly this format:", "```", `taskId: ${taskId}`, "status: done", "filesChanged:", "  - path/to/file.go", "summary: |", "  Brief description of what was implemented.", "issues:", "  - Any concerns or questions for the orchestrator (or empty)", "completedAt: <ISO timestamp>", "```", "This file is the ONLY communication channel back to the mother agent.", "Do not rely on conversation text for handoff.");
     const subagentPrompt = contextParts.join("\n");
     await state.logChat("system", "event", `Sub-agent spawned for task [${taskId}]: ${description}`, taskId);
+    const resultsDir = join9(session.projectRoot, ".duo", "subagent-results");
+    if (!existsSync8(resultsDir)) {
+      await mkdir6(resultsDir, { recursive: true });
+    }
     const spawnedAt = (/* @__PURE__ */ new Date()).toISOString();
     await state.addSubagent({
       taskId,
       status: "pending",
       spawnedAt,
-      prompt: subagentPrompt
+      prompt: subagentPrompt,
+      resultPath
     });
     const result = {
       taskId,
@@ -23874,11 +23883,101 @@ function registerSubagentTools(server) {
             files.length > 0 ? `Files: ${files.join(", ")}` : "",
             dependencies.length > 0 ? `Dependencies: ${dependencies.join(", ")} (all complete)` : "",
             "",
-            "Use the subagentPrompt from the structured response to spawn the sub-agent via your platform's mechanism."
+            `Result will be written to: .duo/subagent-results/${taskId}.md`,
+            "",
+            "REQUIRED NEXT: Spawn the sub-agent using the subagentPrompt below via sessions_spawn.",
+            "After it completes, call duo_subagent_read_result to retrieve and integrate its output."
           ].filter(Boolean).join("\n")
         }
       ],
       structuredContent: result
+    };
+  });
+  server.tool("duo_subagent_read_result", "Read the structured result written by a sub-agent after it finishes. Sub-agents write to .duo/subagent-results/{taskId}.md when done. Call this to retrieve and integrate their work.", {
+    taskId: external_exports.string().describe("Task ID to read results for")
+  }, async ({ taskId }) => {
+    const state = await getStateInstanceAutoLoad();
+    if (!state) {
+      return { content: [{ type: "text", text: "No active Duo session." }] };
+    }
+    const session = state.getSession();
+    const resultPath = join9(session.projectRoot, ".duo", "subagent-results", `${taskId}.md`);
+    if (!existsSync8(resultPath)) {
+      return {
+        content: [{
+          type: "text",
+          text: [
+            `\u23F3 Sub-agent result for [${taskId}] not found yet.`,
+            `Expected at: ${resultPath}`,
+            "",
+            "The sub-agent hasn't completed yet, or hasn't written its result file.",
+            "Check again when the sub-agent finishes."
+          ].join("\n")
+        }]
+      };
+    }
+    const raw = await readFile8(resultPath, "utf-8");
+    return {
+      content: [{
+        type: "text",
+        text: [
+          `\u2705 Sub-agent result for [${taskId}]:`,
+          "",
+          raw,
+          "",
+          "REQUIRED NEXT: Review the result, then call duo_subagent_mark_complete to update session state."
+        ].join("\n")
+      }]
+    };
+  });
+  server.tool("duo_subagent_mark_complete", "Mark a sub-agent task as complete after reviewing its result. Updates session state, records files changed, and auto-checkpoints. Call this after duo_subagent_read_result once you've reviewed the work.", {
+    taskId: external_exports.string().describe("Task ID to mark complete"),
+    filesChanged: external_exports.array(external_exports.string()).describe("Files the sub-agent modified").default([]),
+    summary: external_exports.string().describe("Brief summary of what was done"),
+    issues: external_exports.array(external_exports.string()).describe("Any issues or concerns found in the sub-agent output").default([]),
+    status: external_exports.enum(["completed", "failed", "partial"]).describe("Outcome of the sub-agent work").default("completed")
+  }, async ({ taskId, filesChanged, summary, issues, status: status2 }) => {
+    const state = await getStateInstanceAutoLoad();
+    if (!state) {
+      return { content: [{ type: "text", text: "No active Duo session." }] };
+    }
+    const task = state.getTask(taskId);
+    if (!task) {
+      return {
+        content: [{ type: "text", text: `Task [${taskId}] not found on board.` }],
+        isError: true
+      };
+    }
+    const subagents = state.getSubagents();
+    const sub = subagents.find((s) => s.taskId === taskId);
+    if (sub) {
+      sub.status = status2 === "completed" ? "completed" : "failed";
+      sub.completedAt = (/* @__PURE__ */ new Date()).toISOString();
+      sub.filesChanged = filesChanged;
+      sub.summary = summary;
+      sub.issues = issues;
+    }
+    if (status2 === "completed") {
+      await state.updateTaskStatus(taskId, "review");
+    } else if (status2 === "failed") {
+      await state.updateTaskStatus(taskId, "todo");
+    }
+    await state.checkpoint(`Sub-agent [${taskId}] ${status2}: ${summary.slice(0, 80)}`);
+    await state.logChat("system", "event", `Sub-agent [${taskId}] ${status2} \u2014 ${filesChanged.length} files changed`, taskId);
+    const issueWarning = issues.length > 0 ? [`\u26A0\uFE0F Issues to review:`, ...issues.map((i) => `  - ${i}`)] : [];
+    const nextStep = status2 === "completed" ? `REQUIRED NEXT: Review the actual code changes in: ${filesChanged.join(", ") || "(see sub-agent result)"}. Then continue with remaining tasks or advance to review phase.` : status2 === "failed" ? `REQUIRED NEXT: Task [${taskId}] reset to todo. Investigate the failure, then re-spawn with corrections.` : `REQUIRED NEXT: Task [${taskId}] is partial. Assess remaining work and decide: continue sub-agent or take over.`;
+    return {
+      content: [{
+        type: "text",
+        text: [
+          status2 === "completed" ? `\u2705 Sub-agent [${taskId}] marked complete` : `\u26A0\uFE0F Sub-agent [${taskId}] marked ${status2}`,
+          `Summary: ${summary}`,
+          filesChanged.length > 0 ? `Files: ${filesChanged.join(", ")}` : "",
+          ...issueWarning,
+          "",
+          nextStep
+        ].filter(Boolean).join("\n")
+      }]
     };
   });
 }
@@ -23986,8 +24085,8 @@ var init_recover = __esm({
 // dist/tools/search.js
 import { execFile as execFile2 } from "node:child_process";
 import { promisify as promisify2 } from "node:util";
-import { existsSync as existsSync8 } from "node:fs";
-import { join as join9 } from "node:path";
+import { existsSync as existsSync9 } from "node:fs";
+import { join as join10 } from "node:path";
 async function executeQmdSearch(query, mode, limit, collection) {
   try {
     const args2 = [
@@ -24022,9 +24121,9 @@ async function executeQmdSearch(query, mode, limit, collection) {
   }
 }
 async function ensureCollection(stateDir, sessionId) {
-  const chatDir = join9(stateDir, "chat");
-  const docsDir = join9(stateDir, "docs");
-  if (!existsSync8(chatDir) && !existsSync8(docsDir)) {
+  const chatDir = join10(stateDir, "chat");
+  const docsDir = join10(stateDir, "docs");
+  if (!existsSync9(chatDir) && !existsSync9(docsDir)) {
     return;
   }
   try {
@@ -24032,7 +24131,7 @@ async function ensureCollection(stateDir, sessionId) {
     const collections = JSON.parse(stdout || "[]");
     const collectionName = `duo-session`;
     const exists = collections.some((c) => c.name === collectionName);
-    if (!exists && existsSync8(chatDir)) {
+    if (!exists && existsSync9(chatDir)) {
       await execFileAsync2("qmd", [
         "collection",
         "add",
@@ -24044,7 +24143,7 @@ async function ensureCollection(stateDir, sessionId) {
       ]);
       await execFileAsync2("qmd", ["update"]);
     }
-    if (existsSync8(docsDir)) {
+    if (existsSync9(docsDir)) {
       const docsCollectionName = `duo-docs`;
       const docsExists = collections.some((c) => c.name === docsCollectionName);
       if (!docsExists) {
@@ -24289,12 +24388,12 @@ var init_index = __esm({
 // dist/cli.js
 import { readFileSync } from "node:fs";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
-import { dirname as dirname2, join as join10 } from "node:path";
+import { dirname as dirname2, join as join11 } from "node:path";
 var __filename2 = fileURLToPath2(import.meta.url);
 var __dirname2 = dirname2(__filename2);
 function getVersion() {
   try {
-    const pkg = JSON.parse(readFileSync(join10(__dirname2, "..", "package.json"), "utf-8"));
+    const pkg = JSON.parse(readFileSync(join11(__dirname2, "..", "package.json"), "utf-8"));
     return pkg.version ?? "0.0.0";
   } catch {
     return "0.0.0";
