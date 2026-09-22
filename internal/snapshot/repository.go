@@ -670,12 +670,16 @@ func closesTSStatementBlock(tokens []tsToken, closeIndex int) bool {
 func startsTSDeclarationStatement(tokens []tsToken, openIndex int) bool {
 	start := tsStatementSegmentStart(tokens, openIndex)
 	index := start
+	sawDeclare := false
 	for index < openIndex {
 		if tokens[index].kind == tsPunctuation && tokens[index].value == "@" {
 			index = skipTSDecorator(tokens, index+1, openIndex)
 			continue
 		}
 		if tokens[index].kind == tsIdentifier && isTSDeclarationModifier(tokens[index].value) {
+			if tokens[index].value == "declare" {
+				sawDeclare = true
+			}
 			index++
 			continue
 		}
@@ -687,6 +691,8 @@ func startsTSDeclarationStatement(tokens []tsToken, openIndex int) bool {
 	switch tokens[index].value {
 	case "class", "interface", "enum", "namespace", "module", "type":
 		return true
+	case "global":
+		return sawDeclare
 	default:
 		return false
 	}

@@ -199,10 +199,11 @@ interface Shape {} /import fake from '.\/after-interface'/.test(value);
 enum Choice {} /import fake from '.\/after-enum'/.test(value);
 @decorator
 class Decorated {} /import fake from '.\/after-decorated-class'/.test(value);
-@decorators.audit({ enabled: true })
-export abstract class Audited {} /import fake from '.\/after-decorator-call'/.test(value);
-export const enum Mode {} /import fake from '.\/after-const-enum'/.test(value);
-import { a } from './static';
+	@decorators.audit({ enabled: true })
+	export abstract class Audited {} /import fake from '.\/after-decorator-call'/.test(value);
+	export const enum Mode {} /import fake from '.\/after-const-enum'/.test(value);
+	export {}; declare global { interface Window { atlas: boolean } } /import fake from '.\/after-declare-global'/.test(value);
+	import { a } from './static';
 export { b } from "./exported";
 const c = require('./required');
 const d = import('./dynamic');
