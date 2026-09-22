@@ -144,7 +144,7 @@ function App() {
                 })}
                 {snapshot.nodes.length > 0 ? <div className="graph-legend"><span><i className="legend-dot changed" /> Changed</span><span><i className="legend-dot related" /> Related</span><span><i className="legend-dot unchanged" /> Unchanged</span></div> : <div className="empty-graph">No graph nodes in this snapshot.</div>}
               </div>
-              <div className="map-footer"><div className="workflow"><WorkflowStep label="Plan" done /><WorkflowStep label="Edit" done /><WorkflowStep label="Tests" done={snapshot.verification.failed === 0} warning={snapshot.verification.failed > 0} /><WorkflowStep label="Review" active /></div><span className="footer-revision"><GitBranch size={13} /> {snapshot.repository.revision}</span></div>
+              <div className="map-footer"><div className="workflow"><WorkflowStep label="Plan" /><WorkflowStep label="Edit" /><WorkflowStep label="Tests" done={snapshot.verification.status === 'passed' && snapshot.verification.failed === 0} warning={snapshot.verification.status === 'attention' || snapshot.verification.failed > 0} /><WorkflowStep label="Review" active={snapshot.agentTurn.status.toLowerCase() === 'review'} /></div><span className="footer-revision"><GitBranch size={13} /> {snapshot.repository.revision}</span></div>
             </div>
             <div className="panel review-queue"><div className="panel-heading compact"><div><span className="section-kicker">Human review</span><h2>Review first</h2></div><span className="queue-caption">{reviewTargets.length} prioritized targets</span></div><div className="queue-list">{reviewTargets.length > 0 ? reviewTargets.map((target) => <ReviewRow key={target.id} target={target} selected={target.id === selectedTarget?.id} onClick={() => setSelectedId(target.id)} />) : <div className="empty-queue">No review targets in this snapshot.</div>}</div></div>
           </section>
@@ -187,7 +187,7 @@ function GraphNode({ node, position, selected, enabled, onClick }: { node: Node;
 }
 
 function WorkflowStep({ label, done, active, warning }: { label: string; done?: boolean; active?: boolean; warning?: boolean }) {
-  return <div className={`workflow-step ${active ? 'active' : ''} ${warning ? 'warning' : ''}`}><span className="workflow-icon">{done ? <Check size={12} /> : warning ? <AlertTriangle size={12} /> : <CircleDot size={12} />}</span><span>{label}</span></div>;
+  return <div className={`workflow-step ${done ? 'done' : ''} ${active ? 'active' : ''} ${warning ? 'warning' : ''}`}><span className="workflow-icon">{done ? <Check size={12} /> : warning ? <AlertTriangle size={12} /> : <CircleDot size={12} />}</span><span>{label}</span></div>;
 }
 
 function ReviewRow({ target, selected, onClick }: { target: ReviewTarget; selected: boolean; onClick: () => void }) {

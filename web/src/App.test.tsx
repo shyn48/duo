@@ -70,6 +70,7 @@ describe('Atlas app states', () => {
     expect(container.textContent).toContain('Blocked');
     expect(container.textContent).toContain('82% confidence');
     expect(container.textContent).toContain('No graph nodes in this snapshot.');
+    expect(container.querySelector('.workflow-step.active')).toBeNull();
   });
 
   it('can retry a transient snapshot load failure', async () => {
