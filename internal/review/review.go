@@ -15,17 +15,22 @@ type JudgmentProvider interface {
 
 type DeterministicProvider struct{}
 
+type scoredTarget struct {
+	target model.ReviewTarget
+	units  int
+}
+
 func NewDeterministicProvider() DeterministicProvider { return DeterministicProvider{} }
 
 func (DeterministicProvider) RankReviewTargets(_ context.Context, input model.ReviewState) ([]model.ReviewTarget, error) {
-	targets := make([]model.ReviewTarget, 0, len(input.Candidates))
+	scored := make([]scoredTarget, 0, len(input.Candidates))
 	for _, candidate := range input.Candidates {
-		score := score(candidate)
-		targets = append(targets, model.ReviewTarget{
+		units := scoreUnits(candidate)
+		scored = append(scored, scoredTarget{target: model.ReviewTarget{
 			ID:             candidate.ID,
 			Label:          candidate.Label,
 			Kind:           candidate.Kind,
-			Score:          score,
+			Score:          float64(units) / 20,
 			Reason:         reason(candidate),
 			Confidence:     1,
 			JudgmentSource: "deterministic",
@@ -38,29 +43,31 @@ func (DeterministicProvider) RankReviewTargets(_ context.Context, input model.Re
 			},
 			EvidenceIDs: append([]string(nil), candidate.EvidenceIDs...),
 			NodeIDs:     append([]string(nil), candidate.NodeIDs...),
-		})
+		}, units: units})
 	}
-	sort.SliceStable(targets, func(i, j int) bool {
-		if targets[i].Score == targets[j].Score {
-			return targets[i].ID < targets[j].ID
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].units == scored[j].units {
+			return scored[i].target.ID < scored[j].target.ID
 		}
-		return targets[i].Score > targets[j].Score
+		return scored[i].units > scored[j].units
 	})
-	for i := range targets {
+	targets := make([]model.ReviewTarget, len(scored))
+	for i := range scored {
+		targets[i] = scored[i].target
 		targets[i].Rank = i + 1
 	}
 	return targets, nil
 }
 
-func score(candidate model.ReviewCandidate) float64 {
-	result := float64(candidate.DiffLines)*0.05 + float64(candidate.FanOut)*0.15
-	result += float64(candidate.BoundaryCrossings) * 2
-	result += float64(candidate.PublicContractImpact) * 1.5
+func scoreUnits(candidate model.ReviewCandidate) int {
+	result := candidate.DiffLines + candidate.FanOut*3
+	result += candidate.BoundaryCrossings * 40
+	result += candidate.PublicContractImpact * 30
 	switch strings.ToLower(candidate.Verification) {
 	case "failed":
-		result += 2
+		result += 40
 	case "unknown", "":
-		result += 0.5
+		result += 10
 	}
 	return result
 }

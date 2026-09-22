@@ -96,7 +96,7 @@ type Snapshot struct {
 	Edges        []Edge            `json:"edges"`
 	Evidence     []Evidence        `json:"evidence"`
 	Verification Verification      `json:"verification"`
-	Candidates   []ReviewCandidate `json:"candidates"`
+	Candidates   []ReviewCandidate `json:"-"`
 }
 
 type ReviewDecision struct {

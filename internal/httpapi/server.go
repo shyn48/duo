@@ -1,8 +1,14 @@
 package httpapi
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"io"
+	"mime"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -27,7 +33,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/api/snapshot", s.handleSnapshot)
 	mux.HandleFunc("/api/review-decisions", s.handleReviewDecision)
-	return withCORS(mux)
+	return mux
 }
 
 func (s *Server) Decisions() []model.ReviewDecision {
@@ -36,16 +42,20 @@ func (s *Server) Decisions() []model.ReviewDecision {
 	return append([]model.ReviewDecision(nil), s.decisions...)
 }
 
-func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w, http.MethodGet)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": "0.1.0"})
 }
 
 func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		methodNotAllowed(w, http.MethodGet)
 		return
 	}
-	targets, err := s.provider.RankReviewTargets(r.Context(), model.ReviewState{SnapshotID: s.snapshot.AgentTurn.ID, Candidates: s.snapshot.Candidates})
+	targets, err := s.provider.RankReviewTargets(r.Context(), model.ReviewState{SnapshotID: s.snapshot.AgentTurn.ID, Candidates: cloneCandidates(s.snapshot.Candidates)})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -55,7 +65,16 @@ func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleReviewDecision(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		methodNotAllowed(w, http.MethodPost)
+		return
+	}
+	if !allowedOrigin(r.Header.Get("Origin")) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "origin is not allowed"})
+		return
+	}
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		writeJSON(w, http.StatusUnsupportedMediaType, map[string]string{"error": "Content-Type must be application/json"})
 		return
 	}
 	var input struct {
@@ -63,33 +82,86 @@ func (s *Server) handleReviewDecision(w http.ResponseWriter, r *http.Request) {
 		Decision string `json:"decision"`
 		Reason   string `json:"reason"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
 		return
 	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "request body must contain one JSON object"})
+		return
+	}
+	input.TargetID = strings.TrimSpace(input.TargetID)
 	input.Decision = strings.ToLower(strings.TrimSpace(input.Decision))
+	input.Reason = strings.TrimSpace(input.Reason)
 	if input.TargetID == "" || (input.Decision != "approve" && input.Decision != "revise" && input.Decision != "reject") {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "targetId and decision (approve, revise, reject) are required"})
 		return
 	}
-	decision := model.ReviewDecision{ID: "decision-" + time.Now().UTC().Format("20060102T150405.000000000"), TargetID: input.TargetID, Decision: input.Decision, Reason: input.Reason, CreatedAt: time.Now().UTC()}
+	if !s.hasReviewTarget(input.TargetID) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown review target"})
+		return
+	}
+	decisionID, err := newDecisionID()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "unable to create review decision"})
+		return
+	}
+	createdAt := time.Now().UTC()
+	decision := model.ReviewDecision{ID: decisionID, TargetID: input.TargetID, Decision: input.Decision, Reason: input.Reason, CreatedAt: createdAt}
 	s.mu.Lock()
 	s.decisions = append(s.decisions, decision)
 	s.mu.Unlock()
 	writeJSON(w, http.StatusCreated, decision)
 }
 
-func withCORS(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
+func (s *Server) hasReviewTarget(targetID string) bool {
+	for _, candidate := range s.snapshot.Candidates {
+		if candidate.ID == targetID {
+			return true
 		}
-		next.ServeHTTP(w, r)
-	})
+	}
+	return false
+}
+
+func cloneCandidates(candidates []model.ReviewCandidate) []model.ReviewCandidate {
+	cloned := make([]model.ReviewCandidate, len(candidates))
+	copy(cloned, candidates)
+	for i := range cloned {
+		cloned[i].EvidenceIDs = append([]string(nil), candidates[i].EvidenceIDs...)
+		cloned[i].NodeIDs = append([]string(nil), candidates[i].NodeIDs...)
+	}
+	return cloned
+}
+
+func allowedOrigin(origin string) bool {
+	if strings.TrimSpace(origin) == "" {
+		return true
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	host := parsed.Hostname()
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func newDecisionID() (string, error) {
+	var bytes [12]byte
+	if _, err := rand.Read(bytes[:]); err != nil {
+		return "", err
+	}
+	return "decision-" + hex.EncodeToString(bytes[:]), nil
+}
+
+func methodNotAllowed(w http.ResponseWriter, allowed string) {
+	w.Header().Set("Allow", allowed)
+	writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

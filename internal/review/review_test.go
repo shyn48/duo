@@ -66,3 +66,22 @@ func TestDeterministicProviderDoesNotMutateInput(t *testing.T) {
 		t.Fatalf("provider mutated input")
 	}
 }
+
+func TestDeterministicProviderUsesStableIDOrderForEquivalentScores(t *testing.T) {
+	provider := NewDeterministicProvider()
+	input := model.ReviewState{Candidates: []model.ReviewCandidate{
+		{ID: "z-diff", Label: "Diff", DiffLines: 3},
+		{ID: "a-fanout", Label: "Fan-out", FanOut: 1},
+	}}
+
+	got, err := provider.RankReviewTargets(context.Background(), input)
+	if err != nil {
+		t.Fatalf("rank review targets: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d targets, want 2", len(got))
+	}
+	if got[0].ID != "a-fanout" || got[1].ID != "z-diff" {
+		t.Fatalf("equivalent scores were not ordered by ID: %+v", got)
+	}
+}
