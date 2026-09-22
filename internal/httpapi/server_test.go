@@ -115,7 +115,7 @@ func TestServerCreatesUniqueDecisionIDs(t *testing.T) {
 	defer ts.Close()
 
 	for i := 0; i < 2; i++ {
-		res, err := http.Post(ts.URL+"/api/review-decisions", "application/json", strings.NewReader(`{"targetId":" payments ","decision":"APPROVE"}`))
+		res, err := http.Post(ts.URL+"/api/review-decisions", "application/json", strings.NewReader(`{"targetId":"payments","decision":"APPROVE"}`))
 		if err != nil {
 			t.Fatalf("decision request %d: %v", i, err)
 		}
@@ -134,6 +134,30 @@ func TestServerCreatesUniqueDecisionIDs(t *testing.T) {
 	}
 	if decisions[0].TargetID != "payments" || decisions[0].Decision != "approve" {
 		t.Fatalf("decision was not normalized: %+v", decisions[0])
+	}
+}
+
+func TestServerPreservesOpaqueReviewTargetID(t *testing.T) {
+	targetID := " spaced\nname.ts "
+	server := NewServer(model.Snapshot{Candidates: []model.ReviewCandidate{{ID: targetID, Label: targetID}}}, review.NewDeterministicProvider())
+	ts := httptest.NewServer(server.Handler())
+	defer ts.Close()
+
+	body, err := json.Marshal(map[string]string{"targetId": targetID, "decision": "approve"})
+	if err != nil {
+		t.Fatalf("marshal decision request: %v", err)
+	}
+	res, err := http.Post(ts.URL+"/api/review-decisions", "application/json", strings.NewReader(string(body)))
+	if err != nil {
+		t.Fatalf("decision request: %v", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("decision status = %d, want 201", res.StatusCode)
+	}
+	decisions := server.Decisions()
+	if len(decisions) != 1 || decisions[0].TargetID != targetID {
+		t.Fatalf("target ID was not preserved: %+v", decisions)
 	}
 }
 

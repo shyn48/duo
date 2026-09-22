@@ -90,4 +90,39 @@ describe('Atlas app states', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(container.textContent).toContain('Architecture change map');
   });
+
+  it('renders unknown verification as not run instead of passed', async () => {
+    const unknownPayload: SnapshotPayload = {
+      ...payload,
+      snapshot: {
+        ...payload.snapshot,
+        verification: { status: 'unknown', passed: 0, failed: 0, command: 'Not run for repository ingestion', elapsed: '—' },
+      },
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => okResponse(unknownPayload)));
+    const container = await renderApp();
+
+    const verification = container.querySelector('.verification-card');
+    expect(verification?.classList.contains('passed')).toBe(false);
+    expect(verification?.classList.contains('unknown')).toBe(true);
+    expect(verification?.textContent).toContain('Not run');
+  });
+
+  it('labels file-backed repository snapshots without inventing policy signals', async () => {
+    const filePayload: SnapshotPayload = {
+      ...payload,
+      snapshot: {
+        ...payload.snapshot,
+        nodes: [{ id: 'src/a.ts', label: 'src/a.ts', kind: 'file', status: 'changed', fileCount: 1 }],
+        agentTurn: { ...payload.snapshot.agentTurn, changedFiles: 1 },
+      },
+      reviewTargets: [{ ...payload.reviewTargets[0], id: 'src/a.ts', label: 'src/a.ts', kind: 'file', nodeIds: ['src/a.ts'] }],
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => okResponse(filePayload)));
+    const container = await renderApp();
+
+    expect(container.textContent).toContain('1 file');
+    expect(container.textContent).toContain('Not assessed');
+    expect(container.textContent).not.toContain('ContractInternal');
+  });
 });

@@ -92,7 +92,6 @@ func (s *Server) handleReviewDecision(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "request body must contain one JSON object"})
 		return
 	}
-	input.TargetID = strings.TrimSpace(input.TargetID)
 	input.Decision = strings.ToLower(strings.TrimSpace(input.Decision))
 	input.Reason = strings.TrimSpace(input.Reason)
 	if input.TargetID == "" || (input.Decision != "approve" && input.Decision != "revise" && input.Decision != "reject") {

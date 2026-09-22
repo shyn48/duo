@@ -95,7 +95,11 @@ function App() {
 
   const { snapshot, reviewTargets } = payload;
   const selectedNodeIds = new Set(selectedTarget?.nodeIds ?? []);
-  const graphPositions = layoutGraph(snapshot.nodes);
+  const graphLayout = layoutGraph(snapshot.nodes);
+  const graphPositions = graphLayout.positions;
+  const verificationUnknown = snapshot.verification.status.toLowerCase() === 'unknown';
+  const verificationPassed = snapshot.verification.status.toLowerCase() === 'passed' && snapshot.verification.failed === 0;
+  const graphNodeSummary = `${snapshot.nodes.length} ${snapshot.nodes.every((node) => node.kind === 'file') ? `file${snapshot.nodes.length === 1 ? '' : 's'}` : `component${snapshot.nodes.length === 1 ? '' : 's'}`}`;
 
   function selectGraphNode(nodeId: string) {
     const target = targetForNode(reviewTargets, nodeId);
@@ -128,8 +132,8 @@ function App() {
 
         <div className="workspace-grid">
           <section className="map-column">
-            <div className="panel map-panel"><div className="panel-heading"><div><span className="section-kicker">System view</span><h2>Change map</h2></div><div className="map-heading-meta"><span>{snapshot.nodes.length} components</span><span className="divider-dot" /><span>{snapshot.agentTurn.changedFiles} files changed</span></div></div>
-              <div className="graph-canvas">
+            <div className="panel map-panel"><div className="panel-heading"><div><span className="section-kicker">System view</span><h2>Change map</h2></div><div className="map-heading-meta"><span>{graphNodeSummary}</span><span className="divider-dot" /><span>{snapshot.agentTurn.changedFiles} files changed</span></div></div>
+              <div className="graph-canvas" style={{ minHeight: `${graphLayout.height}px` }}>
                 <svg className="graph-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
                   {snapshot.edges.map((edge, index) => {
                     const from = graphPositions.get(edge.from);
@@ -149,7 +153,7 @@ function App() {
             <div className="panel review-queue"><div className="panel-heading compact"><div><span className="section-kicker">Human review</span><h2>Review first</h2></div><span className="queue-caption">{reviewTargets.length} prioritized targets</span></div><div className="queue-list">{reviewTargets.length > 0 ? reviewTargets.map((target) => <ReviewRow key={target.id} target={target} selected={target.id === selectedTarget?.id} onClick={() => setSelectedId(target.id)} />) : <div className="empty-queue">No review targets in this snapshot.</div>}</div></div>
           </section>
 
-          <aside className="panel evidence-panel"><div className="evidence-header"><div><span className="section-kicker">Selected target</span><h2>Evidence</h2></div><span className="confidence-chip"><Sparkles size={12} /> {selectedTarget?.judgmentSource === 'jev' ? 'Jev judgment' : 'Deterministic baseline'}{selectedTarget ? ` · ${Math.round(selectedTarget.confidence * 100)}% confidence` : ''}</span></div>{selectedTarget ? <><div className="selected-target"><div className="target-icon"><Layers3 size={18} /></div><div><h3>{selectedTarget.label}</h3><span>Priority #{selectedTarget.rank} · {selectedTarget.kind}</span></div><span className="priority-badge">Score {selectedTarget.score.toFixed(1)}</span></div><div className="reason-box"><span>Why review this first</span><strong>{selectedTarget.reason}</strong></div><SignalGrid target={selectedTarget} /><div className="evidence-section"><div className="subsection-heading"><h3>Linked evidence</h3><span>{selectedEvidence.length} items</span></div><div className="evidence-list">{selectedEvidence.map((item) => <EvidenceRow key={item.id} item={item} />)}</div></div><div className={`verification-card ${snapshot.verification.failed > 0 ? 'attention' : 'passed'}`}><div className="verification-icon">{snapshot.verification.failed > 0 ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}</div><div><span>Verification · {snapshot.verification.status}</span><strong>{snapshot.verification.passed} passed · {snapshot.verification.failed} failed</strong><small>{snapshot.verification.command} · {snapshot.verification.elapsed}</small></div></div><div className="decision-area">{selectedDecision ? <div className={`decision-confirmation ${selectedDecision.decision}`} role="status"><CheckCircle2 size={16} /><span>{selectedDecision.decision === 'revise' ? 'Revision requested' : selectedDecision.decision === 'reject' ? 'Review rejected' : 'Review approved'}</span></div> : <><button className="revision-button" type="button" disabled={decisionBusyTargetId !== null} onClick={() => void handleDecision('revise')}><MessageSquareReply size={16} /> {reviewActionLabel('revise')}</button><button className="approve-button" type="button" disabled={decisionBusyTargetId !== null} onClick={() => void handleDecision('approve')}><Check size={16} /> {reviewActionLabel('approve')}</button>{decisionError?.targetId === selectedTarget.id ? <div className="decision-error" role="alert">{decisionError.message}</div> : null}</>}</div></> : <div className="empty-selection">Select a review target to inspect its evidence.</div>}</aside>
+          <aside className="panel evidence-panel"><div className="evidence-header"><div><span className="section-kicker">Selected target</span><h2>Evidence</h2></div><span className="confidence-chip"><Sparkles size={12} /> {selectedTarget?.judgmentSource === 'jev' ? 'Jev judgment' : 'Deterministic baseline'}{selectedTarget ? ` · ${Math.round(selectedTarget.confidence * 100)}% confidence` : ''}</span></div>{selectedTarget ? <><div className="selected-target"><div className="target-icon"><Layers3 size={18} /></div><div><h3>{selectedTarget.label}</h3><span>Priority #{selectedTarget.rank} · {selectedTarget.kind}</span></div><span className="priority-badge">Score {selectedTarget.score.toFixed(1)}</span></div><div className="reason-box"><span>Why review this first</span><strong>{selectedTarget.reason}</strong></div><SignalGrid target={selectedTarget} /><div className="evidence-section"><div className="subsection-heading"><h3>Linked evidence</h3><span>{selectedEvidence.length} items</span></div><div className="evidence-list">{selectedEvidence.map((item) => <EvidenceRow key={item.id} item={item} />)}</div></div><div className={`verification-card ${verificationUnknown ? 'unknown' : verificationPassed ? 'passed' : 'attention'}`}><div className="verification-icon">{verificationUnknown ? <Clock3 size={17} /> : verificationPassed ? <CheckCircle2 size={17} /> : <AlertTriangle size={17} />}</div><div><span>Verification · {snapshot.verification.status}</span><strong>{verificationUnknown ? 'Not run' : `${snapshot.verification.passed} passed · ${snapshot.verification.failed} failed`}</strong><small>{snapshot.verification.command} · {snapshot.verification.elapsed}</small></div></div><div className="decision-area">{selectedDecision ? <div className={`decision-confirmation ${selectedDecision.decision}`} role="status"><CheckCircle2 size={16} /><span>{selectedDecision.decision === 'revise' ? 'Revision requested' : selectedDecision.decision === 'reject' ? 'Review rejected' : 'Review approved'}</span></div> : <><button className="revision-button" type="button" disabled={decisionBusyTargetId !== null} onClick={() => void handleDecision('revise')}><MessageSquareReply size={16} /> {reviewActionLabel('revise')}</button><button className="approve-button" type="button" disabled={decisionBusyTargetId !== null} onClick={() => void handleDecision('approve')}><Check size={16} /> {reviewActionLabel('approve')}</button>{decisionError?.targetId === selectedTarget.id ? <div className="decision-error" role="alert">{decisionError.message}</div> : null}</>}</div></> : <div className="empty-selection">Select a review target to inspect its evidence.</div>}</aside>
         </div>
       </main>
     </div>
@@ -163,10 +167,26 @@ function formatStatus(status: string): string {
 }
 
 type GraphPosition = { x: number; y: number };
+type GraphLayout = { positions: Map<string, GraphPosition>; height: number };
 
-function layoutGraph(nodes: Node[]): Map<string, GraphPosition> {
+function layoutGraph(nodes: Node[]): GraphLayout {
   const positions = new Map<string, GraphPosition>();
-  if (nodes.length === 0) return positions;
+  if (nodes.length === 0) return { positions, height: 386 };
+  if (nodes.length > 8) {
+	const columns = 2;
+    const rows = Math.ceil(nodes.length / columns);
+    const rowHeight = 86;
+    const height = Math.max(386, rows * rowHeight + 60);
+    nodes.forEach((node, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      positions.set(node.id, {
+        x: ((column + 0.5) / columns) * 100,
+        y: (((row + 0.5) * rowHeight) / height) * 100,
+      });
+    });
+    return { positions, height };
+  }
   const centerX = 50;
   const centerY = 46;
   const radiusX = 26;
@@ -179,11 +199,11 @@ function layoutGraph(nodes: Node[]): Map<string, GraphPosition> {
     const angle = -Math.PI / 2 + (index * Math.PI * 2) / nodes.length;
     positions.set(node.id, { x: centerX + Math.cos(angle) * radiusX, y: centerY + Math.sin(angle) * radiusY });
   });
-  return positions;
+  return { positions, height: 386 };
 }
 
 function GraphNode({ node, position, selected, enabled, onClick }: { node: Node; position: GraphPosition; selected: boolean; enabled: boolean; onClick: (id: string) => void }) {
-  return <button className={`graph-node ${node.status} ${selected ? 'selected' : ''}`} style={{ left: `${position.x}%`, top: `${position.y}%` }} type="button" aria-pressed={selected} disabled={!enabled} onClick={() => onClick(node.id)}><span className="node-status"><span /></span><strong>{node.label}</strong><small>{node.fileCount} files</small></button>;
+  return <button className={`graph-node ${node.status} ${selected ? 'selected' : ''}`} style={{ left: `${position.x}%`, top: `${position.y}%` }} type="button" title={node.label} aria-pressed={selected} disabled={!enabled} onClick={() => onClick(node.id)}><span className="node-status"><span /></span><strong>{node.label}</strong><small>{node.kind === 'file' ? 'File' : `${node.fileCount} file${node.fileCount === 1 ? '' : 's'}`}</small></button>;
 }
 
 function WorkflowStep({ label, done, active, warning }: { label: string; done?: boolean; active?: boolean; warning?: boolean }) {
@@ -196,7 +216,9 @@ function ReviewRow({ target, selected, onClick }: { target: ReviewTarget; select
 }
 
 function SignalGrid({ target }: { target: ReviewTarget }) {
-  const signals = [['Diff', `${target.signals.diffLines} lines`], ['Fan-out', `${target.signals.fanOut} dependents`], ['Boundary', `${target.signals.boundaryCrossings} crossing${target.signals.boundaryCrossings === 1 ? '' : 's'}`], ['Contract', target.signals.publicContractImpact ? 'Public API' : 'Internal']];
+  const signals = target.kind === 'file'
+    ? [['Diff', `${target.signals.diffLines} lines`], ['Fan-out', `${target.signals.fanOut} dependents`], ['Boundary', 'Not assessed'], ['Contract', 'Not assessed']]
+    : [['Diff', `${target.signals.diffLines} lines`], ['Fan-out', `${target.signals.fanOut} dependents`], ['Boundary', `${target.signals.boundaryCrossings} crossing${target.signals.boundaryCrossings === 1 ? '' : 's'}`], ['Contract', target.signals.publicContractImpact ? 'Public API' : 'Internal']];
   return <div className="signal-grid">{signals.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>;
 }
 
