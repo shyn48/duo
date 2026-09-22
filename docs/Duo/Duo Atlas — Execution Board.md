@@ -13,7 +13,7 @@ updated: 2026-09-22
 
 ## Current state
 
-- **Current slice:** Slice 2 — real local repository ingestion, ready to start
+- **Current slice:** Slice 3 — agent turn evidence, ready to start
 - **Checkout:** `/Users/shayanbalaee/code-stuff/Personal Projects/duo-atlas`
 - **Remote:** `https://github.com/shyn48/duo.git`
 - **Branch:** `main`
@@ -21,8 +21,9 @@ updated: 2026-09-22
 - **Legacy tag:** `duo-legacy-v0.6.0` pushed before cutover
 - **Cutover commit:** `527a068` — Atlas replaced the deprecated MCP product and was pushed to `main`
 - **Slice 1 review commits:** `f4216ef` + final frontend follow-up `f6a8740`, both pushed to `main`
+- **Slice 2 ingestion commits:** `508ff82` + final TypeScript lexer follow-up `346db2f`, both pushed to `main`
 - **Verified upstream divergence after each code push:** `0 0`
-- **Next gate:** design the smallest Slice 2 ingestion path, write RED integration tests, then replace fixture-only repository data without changing the public HTTP contract
+- **Next gate:** define the smallest normalized agent-turn event envelope, ingest one local agent fixture, and link tool/patch/check evidence to the real repository graph
 
 ## Completed evidence
 
@@ -53,6 +54,20 @@ updated: 2026-09-22
 - [x] Review pass 2 and final follow-up re-review until clean
 - [x] Commit and push Slice 1 (`f4216ef`, `f6a8740`)
 
+### Slice 2 implementation
+
+- [x] `-repo` local repository selection with `.` default
+- [x] Git root, HEAD revision, working-tree diff and clean latest-commit fallback
+- [x] NUL-safe Git path parsing, rename/delete/root/merge commit handling
+- [x] Git-ignored/generated source filtering and bounded regular-file reads
+- [x] Go and TypeScript local dependency projection with baseline variants
+- [x] File-backed nodes, evidence and deterministic review candidates
+- [x] Unknown verification rendered as not run; boundary/contract signals explicitly unassessed
+- [x] Dense file graph rendering and file-aware UI labels
+- [x] Integration/regression tests and real self-ingestion browser verification
+- [x] Review/fix/re-review until clean
+- [x] Commit and push Slice 2 (`508ff82`, `346db2f`)
+
 ## Slice 0 — Cutover, design and plan
 
 - [x] Audit deprecated Duo MCP repository
@@ -65,12 +80,12 @@ updated: 2026-09-22
 
 ## Slice 2 — Real local repository ingestion
 
-- [ ] Git revision/status/diff ingestion
-- [ ] TypeScript and Go file-level dependency edges
-- [ ] Replace fixture-only data while preserving API contract
-- [ ] Integration tests and browser verification
-- [ ] Review/fix loop
-- [ ] Push to `main`
+- [x] Git revision/status/diff ingestion
+- [x] TypeScript and Go file-level dependency edges
+- [x] Replace fixture-only runtime data while preserving API contract and fixture tests
+- [x] Integration tests and browser verification
+- [x] Review/fix loop
+- [x] Push to `main` (`508ff82`, `346db2f`)
 
 ## Slice 3 — Agent turn evidence
 
@@ -123,6 +138,10 @@ Slice 1 is clean. Pass 1 findings were fixed in `f4216ef`; the final frontend re
 | S1-08 | Low | Placeholder controls looked interactive and TypeScript/Vite build outputs were tracked | Disable inert controls; move build info under ignored `dist/` and delete generated config output | Closed |
 
 Validation at the clean Slice 1 head includes `go test -race ./...`, `go vet ./...`, `go build ./cmd/atlas`, `npm test --prefix web` (7/7), `npm run build --prefix web`, `npm run lint --prefix web`, and `git diff --check`. API runtime probes returned 200/201 for valid requests, 403 for a foreign-origin write, and 415 for a non-JSON write. The real Vite browser path submitted a decision with HTTP 201 and no console errors. Chrome geometry showed no horizontal overflow at 1000px or its 500px narrow viewport (`scrollWidth === clientWidth` in both), and the `<=420px` confidence-chip follow-up was independently re-reviewed against the responsive CSS.
+
+Slice 2 is also clean. `508ff82` added the real Git-backed repository adapter and dogfood path; `346db2f` closed the last review finding around `declare global { ... }` followed by a regex literal in TypeScript. Review fixes also covered merge/root commits, rename/delete baselines, NUL-safe filenames, ignored/generated sources, bounded/non-regular file handling, TypeScript regex/comment/string false positives, dense graph layout, and truthful file/policy labels. Go package imports are currently projected onto package source files; this is a deliberate file-level approximation until symbol-level indexing exists.
+
+Slice 2 validation: `go test ./...`, `go test -race ./...`, `go vet ./...`, `go build ./cmd/atlas`, `npm test --prefix web` (9/9), `npm run build --prefix web`, `npm run lint --prefix web`, and `git diff --check` pass. From a clean checkout, Atlas ingested itself at revision `346db2fd1872`, reported the latest-commit turn and its two changed files plus related dependency nodes/edges, accepted a review decision with HTTP 201, and rendered the same evidence in the real browser with no console errors.
 
 ## Handoff
 

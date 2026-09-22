@@ -40,14 +40,14 @@ Work in vertical slices. For each slice:
 
 ### Slice 2 — Real local repository ingestion
 
-- [ ] Read repository root and Git revision from configuration/CLI.
-- [ ] Ingest changed files and diff metadata.
-- [ ] Ingest file-level dependency edges for TypeScript and Go.
-- [ ] Replace fixture-only data while preserving the HTTP contract.
-- [ ] Add fixture and real-repository integration tests.
-- [ ] Browser review of a real Duo Atlas checkout.
-- [ ] Review/fix loop until clean.
-- [ ] Commit and push to `main`.
+- [x] Read repository root and Git revision from configuration/CLI.
+- [x] Ingest changed files and diff metadata.
+- [x] Ingest file-level dependency edges for TypeScript and Go.
+- [x] Replace fixture-only runtime data while preserving fixture tests and the HTTP contract.
+- [x] Add fixture and real-repository integration tests.
+- [x] Browser review of a real Duo Atlas checkout.
+- [x] Review/fix loop until clean.
+- [x] Commit and push to `main` (`508ff82`, final lexer follow-up `346db2f`).
 
 ### Slice 3 — Agent turn evidence
 
@@ -93,3 +93,7 @@ Work in vertical slices. For each slice:
 Slice 1 review fixes are in `f4216ef`, with the final two frontend re-review findings closed in `f6a8740`. The first pass found API boundary/validation gaps, non-stable score ties, provider input aliasing, internal ranking inputs leaking through JSON, target-global frontend decision state, fixture-hardcoded graph rendering, missing server-owned status/confidence/empty/retry states, inert controls that looked active, tracked TypeScript build outputs, and responsive overflow around intermediate/narrow widths. The final re-review additionally caught a very-small-phone confidence-chip clipping case and hardcoded workflow progress; both were fixed and regression-tested.
 
 Re-review is clean: `go test -race ./...`, `go vet ./...`, `go build ./cmd/atlas`, `npm test --prefix web` (7/7), `npm run build --prefix web`, `npm run lint --prefix web`, API boundary smokes, and real Chrome desktop/narrow geometry all pass. At 1000px and at Chrome's 500px narrow viewport, document `scrollWidth` equals `clientWidth`; the map and evidence panels remain inside the viewport. The `<=420px` confidence-chip follow-up was independently re-reviewed against the responsive CSS.
+
+Slice 2 is implemented in `508ff82`, with the final TypeScript declaration/regex lexer finding closed in `346db2f`. The repository adapter resolves the selected Git root and HEAD revision, ingests working-tree changes when present and the latest commit when clean, preserves rename/delete/baseline evidence, handles root and merge commits, uses NUL-safe Git path parsing, ignores Git-ignored generated sources, and projects local Go/TypeScript dependencies into the existing graph/review contract. Unsupported architecture-boundary and public-contract signals remain explicitly unassessed rather than inferred.
+
+Slice 2 re-review is clean: full Go tests and race tests, `go vet`, Go build, 9/9 frontend tests, frontend build/lint, and `git diff --check` pass. A clean-tree dogfood run on Duo Atlas itself reported repository `duo-atlas` at `346db2fd1872`, turn `Latest commit: fix: handle declare global after TypeScript blocks`, the two changed files plus related dependency nodes/edges, and a valid review decision POST returned 201. The real browser rendered the same latest-commit evidence and unassessed policy signals with no console errors.

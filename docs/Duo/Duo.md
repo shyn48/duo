@@ -22,9 +22,10 @@ Duo is evolving from a workflow tool for staying involved while writing code int
 - [[Duo Atlas — Design v0.1]] — agreed Slice 1 architecture and contracts
 - [[Duo Atlas — Execution Plan v0.1]] — slice sequence and review gates
 - [[Duo Atlas — Execution Board]] — live implementation board and review ledger
-- Current stage: Slice 1 complete and clean; Slice 2 ready to start
-- Product code head: `f6a8740` (ranked-review tracer bullet + review fixes)
-- Next gate: ingest a real local repository while preserving the existing HTTP/UI contract
+- Current stage: Slice 2 complete and clean; Slice 3 ready to start
+- Product code head: `346db2f` (real repository ingestion + final lexer review fix)
+- Dogfood: Atlas now ingests its own checkout by default and falls back to the latest commit when the working tree is clean
+- Next gate: ingest normalized agent-turn evidence and link tools, patches, checks and claims to graph targets
 
 ## Next Ideas
 
