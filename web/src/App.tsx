@@ -23,8 +23,8 @@ import {
   TestTube2,
 } from 'lucide-react';
 import { loadSnapshot, submitReviewDecision } from './api';
-import { decisionForTarget, evidenceForTarget, reviewActionLabel, selectTarget, targetForNode } from './review';
-import type { Evidence, Node, ReviewDecision, ReviewTarget, SnapshotPayload } from './types';
+import { decisionForTarget, evidenceForTarget, eventsForTarget, reviewActionLabel, selectTarget, targetForNode } from './review';
+import type { AgentEvent, Evidence, Node, ReviewDecision, ReviewTarget, SnapshotPayload } from './types';
 import './styles.css';
 
 const navItems = [
@@ -69,6 +69,7 @@ function App() {
     [payload, selectedId],
   );
   const selectedEvidence = payload && selectedTarget ? evidenceForTarget(payload.snapshot, selectedTarget) : [];
+  const selectedAgentEvents = payload && selectedTarget ? eventsForTarget(payload.snapshot.agentEvents ?? [], selectedTarget) : [];
   const selectedDecision = selectedTarget ? decisionForTarget(decisions, selectedTarget.id) : undefined;
 
   async function handleDecision(action: 'approve' | 'revise') {
@@ -153,7 +154,24 @@ function App() {
             <div className="panel review-queue"><div className="panel-heading compact"><div><span className="section-kicker">Human review</span><h2>Review first</h2></div><span className="queue-caption">{reviewTargets.length} prioritized targets</span></div><div className="queue-list">{reviewTargets.length > 0 ? reviewTargets.map((target) => <ReviewRow key={target.id} target={target} selected={target.id === selectedTarget?.id} onClick={() => setSelectedId(target.id)} />) : <div className="empty-queue">No review targets in this snapshot.</div>}</div></div>
           </section>
 
-          <aside className="panel evidence-panel"><div className="evidence-header"><div><span className="section-kicker">Selected target</span><h2>Evidence</h2></div><span className="confidence-chip"><Sparkles size={12} /> {selectedTarget?.judgmentSource === 'jev' ? 'Jev judgment' : 'Deterministic baseline'}{selectedTarget ? ` · ${Math.round(selectedTarget.confidence * 100)}% confidence` : ''}</span></div>{selectedTarget ? <><div className="selected-target"><div className="target-icon"><Layers3 size={18} /></div><div><h3>{selectedTarget.label}</h3><span>Priority #{selectedTarget.rank} · {selectedTarget.kind}</span></div><span className="priority-badge">Score {selectedTarget.score.toFixed(1)}</span></div><div className="reason-box"><span>Why review this first</span><strong>{selectedTarget.reason}</strong></div><SignalGrid target={selectedTarget} /><div className="evidence-section"><div className="subsection-heading"><h3>Linked evidence</h3><span>{selectedEvidence.length} items</span></div><div className="evidence-list">{selectedEvidence.map((item) => <EvidenceRow key={item.id} item={item} />)}</div></div><div className={`verification-card ${verificationUnknown ? 'unknown' : verificationPassed ? 'passed' : 'attention'}`}><div className="verification-icon">{verificationUnknown ? <Clock3 size={17} /> : verificationPassed ? <CheckCircle2 size={17} /> : <AlertTriangle size={17} />}</div><div><span>Verification · {snapshot.verification.status}</span><strong>{verificationUnknown ? 'Not run' : `${snapshot.verification.passed} passed · ${snapshot.verification.failed} failed`}</strong><small>{snapshot.verification.command} · {snapshot.verification.elapsed}</small></div></div><div className="decision-area">{selectedDecision ? <div className={`decision-confirmation ${selectedDecision.decision}`} role="status"><CheckCircle2 size={16} /><span>{selectedDecision.decision === 'revise' ? 'Revision requested' : selectedDecision.decision === 'reject' ? 'Review rejected' : 'Review approved'}</span></div> : <><button className="revision-button" type="button" disabled={decisionBusyTargetId !== null} onClick={() => void handleDecision('revise')}><MessageSquareReply size={16} /> {reviewActionLabel('revise')}</button><button className="approve-button" type="button" disabled={decisionBusyTargetId !== null} onClick={() => void handleDecision('approve')}><Check size={16} /> {reviewActionLabel('approve')}</button>{decisionError?.targetId === selectedTarget.id ? <div className="decision-error" role="alert">{decisionError.message}</div> : null}</>}</div></> : <div className="empty-selection">Select a review target to inspect its evidence.</div>}</aside>
+          <aside className="panel evidence-panel">
+            <div className="evidence-header"><div><span className="section-kicker">Selected target</span><h2>Evidence</h2></div><span className="confidence-chip"><Sparkles size={12} /> {selectedTarget?.judgmentSource === 'jev' ? 'Jev judgment' : 'Deterministic baseline'}{selectedTarget ? ` · ${Math.round(selectedTarget.confidence * 100)}% confidence` : ''}</span></div>
+            {selectedTarget ? <>
+              <div className="selected-target"><div className="target-icon"><Layers3 size={18} /></div><div><h3>{selectedTarget.label}</h3><span>Priority #{selectedTarget.rank} · {selectedTarget.kind}</span></div><span className="priority-badge">Score {selectedTarget.score.toFixed(1)}</span></div>
+              <div className="reason-box"><span>Why review this first</span><strong>{selectedTarget.reason}</strong></div>
+              <SignalGrid target={selectedTarget} />
+              <div className="evidence-section">
+                <div className="subsection-heading"><h3>Linked evidence</h3><span>{selectedEvidence.length} items</span></div>
+                <div className="evidence-list">{selectedEvidence.map((item) => <EvidenceRow key={item.id} item={item} />)}</div>
+              </div>
+              <div className="evidence-section agent-activity" aria-label="Agent activity">
+                <div className="subsection-heading"><h3>Agent activity</h3><span>{selectedAgentEvents.length} events</span></div>
+                {selectedAgentEvents.length > 0 ? <div className="timeline-list">{selectedAgentEvents.map((event) => <AgentEventRow key={event.id} event={event} />)}</div> : <div className="timeline-empty">No agent activity linked to this target.</div>}
+              </div>
+              <div className={`verification-card ${verificationUnknown ? 'unknown' : verificationPassed ? 'passed' : 'attention'}`}><div className="verification-icon">{verificationUnknown ? <Clock3 size={17} /> : verificationPassed ? <CheckCircle2 size={17} /> : <AlertTriangle size={17} />}</div><div><span>Verification · {snapshot.verification.status}</span><strong>{verificationUnknown ? 'Not run' : `${snapshot.verification.passed} passed · ${snapshot.verification.failed} failed`}</strong><small>{snapshot.verification.command} · {snapshot.verification.elapsed}</small></div></div>
+              <div className="decision-area">{selectedDecision ? <div className={`decision-confirmation ${selectedDecision.decision}`} role="status"><CheckCircle2 size={16} /><span>{selectedDecision.decision === 'revise' ? 'Revision requested' : selectedDecision.decision === 'reject' ? 'Review rejected' : 'Review approved'}</span></div> : <><button className="revision-button" type="button" disabled={decisionBusyTargetId !== null} onClick={() => void handleDecision('revise')}><MessageSquareReply size={16} /> {reviewActionLabel('revise')}</button><button className="approve-button" type="button" disabled={decisionBusyTargetId !== null} onClick={() => void handleDecision('approve')}><Check size={16} /> {reviewActionLabel('approve')}</button>{decisionError?.targetId === selectedTarget.id ? <div className="decision-error" role="alert">{decisionError.message}</div> : null}</>}</div>
+            </> : <div className="empty-selection">Select a review target to inspect its evidence.</div>}
+          </aside>
         </div>
       </main>
     </div>
@@ -223,8 +241,15 @@ function SignalGrid({ target }: { target: ReviewTarget }) {
 }
 
 function EvidenceRow({ item }: { item: Evidence }) {
-  const icon = item.kind === 'test' ? <TestTube2 size={14} /> : item.kind === 'constraint' ? <ShieldCheck size={14} /> : <FileCode2 size={14} />;
-  return <div className="evidence-row"><span className={`evidence-icon ${item.status}`}>{icon}</span><span><strong>{item.title}</strong><small>{item.detail}</small></span><ArrowUpRight size={14} className="evidence-arrow" /></div>;
+  const icon = item.kind === 'test' ? <TestTube2 size={14} /> : item.kind === 'constraint' ? <ShieldCheck size={14} /> : item.kind === 'agent-tool' ? <Command size={14} /> : <FileCode2 size={14} />;
+  const metadata = [item.basis ? formatStatus(item.basis) : '', item.source ?? '', item.freshness ? formatStatus(item.freshness) : ''].filter(Boolean).join(' · ');
+  return <div className="evidence-row"><span className={`evidence-icon ${item.status}`}>{icon}</span><span><strong>{item.title}</strong><small>{item.detail}</small>{metadata ? <small className="evidence-meta">{metadata}</small> : null}</span><ArrowUpRight size={14} className="evidence-arrow" /></div>;
+}
+
+function AgentEventRow({ event }: { event: AgentEvent }) {
+  const icon = event.kind === 'check' ? <TestTube2 size={14} /> : event.kind === 'patch' ? <FileCode2 size={14} /> : event.kind === 'claim' ? <MessageSquareReply size={14} /> : <Command size={14} />;
+  const metadata = `${formatStatus(event.status)} · ${formatStatus(event.basis)} · ${event.source} · ${formatStatus(event.freshness)}`;
+  return <div className={`timeline-row ${event.kind} ${event.status} ${event.basis} ${event.freshness}`}><span className="timeline-sequence">{String(event.sequence).padStart(2, '0')}</span><span className="timeline-icon">{icon}</span><span className="timeline-copy"><strong>{event.title}</strong><small>{event.detail}</small><small className="timeline-meta">{metadata}</small></span></div>;
 }
 
 export default App;

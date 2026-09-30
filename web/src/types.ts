@@ -11,8 +11,23 @@ export interface AgentTurn {
   id: string;
   title: string;
   status: string;
+  source?: string;
   changedFiles: number;
   completionClaim?: string;
+}
+
+export interface AgentEvent {
+  id: string;
+  sequence: number;
+  kind: 'tool' | 'patch' | 'check' | 'claim';
+  title: string;
+  detail: string;
+  status: string;
+  basis: 'observed' | 'claimed';
+  source: string;
+  freshness: 'current' | 'stale' | 'unknown';
+  targetIds: string[];
+  evidenceIds: string[];
 }
 
 export interface Node {
@@ -36,7 +51,10 @@ export interface Evidence {
   title: string;
   detail: string;
   status: string;
-  targetId?: string;
+  basis?: 'observed' | 'claimed';
+  source?: string;
+  freshness?: 'current' | 'stale' | 'unknown' | 'recorded';
+  targetIds?: string[];
 }
 
 export interface Verification {
@@ -48,8 +66,10 @@ export interface Verification {
 }
 
 export interface Snapshot {
+  snapshotId: string;
   repository: Repository;
   agentTurn: AgentTurn;
+  agentEvents: AgentEvent[];
   nodes: Node[];
   edges: Edge[];
   evidence: Evidence[];

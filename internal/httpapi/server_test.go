@@ -14,6 +14,7 @@ import (
 
 func TestServerExposesHealthAndRankedSnapshot(t *testing.T) {
 	snapshot := model.Snapshot{
+		SnapshotID: "snapshot-abc123",
 		Repository: model.Repository{ID: "fixture", Name: "vpay-backend", Revision: "abc123"},
 		AgentTurn:  model.AgentTurn{ID: "turn-001", Title: "Add idempotent payment retries", Status: "review"},
 		Candidates: []model.ReviewCandidate{{ID: "payments", Label: "Payments", DiffLines: 20, FanOut: 4, BoundaryCrossings: 1, Verification: "failed"}},
@@ -45,6 +46,74 @@ func TestServerExposesHealthAndRankedSnapshot(t *testing.T) {
 	}
 	if len(payload.ReviewTargets) != 1 || payload.ReviewTargets[0].ID != "payments" {
 		t.Fatalf("unexpected review targets: %+v", payload.ReviewTargets)
+	}
+}
+
+type capturingProvider struct {
+	snapshotID string
+}
+
+func (provider *capturingProvider) RankReviewTargets(_ context.Context, input model.ReviewState) ([]model.ReviewTarget, error) {
+	provider.snapshotID = input.SnapshotID
+	return []model.ReviewTarget{}, nil
+}
+
+func TestServerRanksAgainstRepositorySnapshotIdentity(t *testing.T) {
+	provider := &capturingProvider{}
+	server := NewServer(model.Snapshot{
+		SnapshotID: "worktree-abc-state",
+		AgentTurn:  model.AgentTurn{ID: "agent-turn-42"},
+	}, provider)
+	req := httptest.NewRequest(http.MethodGet, "/api/snapshot", nil)
+	res := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("snapshot status = %d, want 200", res.Code)
+	}
+	if provider.snapshotID != "worktree-abc-state" {
+		t.Fatalf("provider snapshot id = %q, want repository state id", provider.snapshotID)
+	}
+	var payload struct {
+		Snapshot model.Snapshot `json:"snapshot"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode snapshot response: %v", err)
+	}
+	if payload.Snapshot.SnapshotID != "worktree-abc-state" || payload.Snapshot.AgentTurn.ID != "agent-turn-42" {
+		t.Fatalf("public identities were conflated: snapshot=%q turn=%q", payload.Snapshot.SnapshotID, payload.Snapshot.AgentTurn.ID)
+	}
+}
+
+func TestServerSerializesEmptyCollectionsAsArrays(t *testing.T) {
+	server := NewServer(model.Snapshot{}, review.NewDeterministicProvider())
+	req := httptest.NewRequest(http.MethodGet, "/api/snapshot", nil)
+	res := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("snapshot status = %d, want 200", res.Code)
+	}
+	var payload struct {
+		Snapshot struct {
+			Nodes       json.RawMessage `json:"nodes"`
+			Edges       json.RawMessage `json:"edges"`
+			Evidence    json.RawMessage `json:"evidence"`
+			AgentEvents json.RawMessage `json:"agentEvents"`
+		} `json:"snapshot"`
+		ReviewTargets json.RawMessage `json:"reviewTargets"`
+		Decisions     json.RawMessage `json:"decisions"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode snapshot response: %v", err)
+	}
+	for name, raw := range map[string]json.RawMessage{
+		"nodes": payload.Snapshot.Nodes, "edges": payload.Snapshot.Edges, "evidence": payload.Snapshot.Evidence,
+		"agentEvents": payload.Snapshot.AgentEvents, "reviewTargets": payload.ReviewTargets, "decisions": payload.Decisions,
+	} {
+		if string(raw) != "[]" {
+			t.Fatalf("%s serialized as %s, want []", name, raw)
+		}
 	}
 }
 

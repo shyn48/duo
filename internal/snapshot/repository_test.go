@@ -60,8 +60,33 @@ func TestLoadRepositoryUsesWorkingTreeAndDependencyFanout(t *testing.T) {
 	if !hasEdge(snapshot, "internal/b/b.go", "internal/a/a.go") {
 		t.Fatalf("expected dependent edge internal/b/b.go -> internal/a/a.go, got %+v", snapshot.Edges)
 	}
-	if len(snapshot.Evidence) != 1 || snapshot.Evidence[0].TargetID != "internal/a/a.go" || !strings.Contains(snapshot.Evidence[0].Detail, "working tree") {
+	if len(snapshot.Evidence) != 1 || len(snapshot.Evidence[0].TargetIDs) != 1 || snapshot.Evidence[0].TargetIDs[0] != "internal/a/a.go" || !strings.Contains(snapshot.Evidence[0].Detail, "working tree") {
 		t.Fatalf("unexpected evidence: %+v", snapshot.Evidence)
+	}
+}
+
+func TestLoadRepositoryWorktreeSnapshotIDChangesWhenContentChanges(t *testing.T) {
+	root := initTestRepository(t)
+	writeTestFile(t, root, "a.go", "package demo\n\nvar Value = 1\n")
+	git(t, root, "add", ".")
+	git(t, root, "commit", "-m", "baseline")
+
+	writeTestFile(t, root, "a.go", "package demo\n\nvar Value = 2\n")
+	first, err := LoadRepository(root)
+	if err != nil {
+		t.Fatalf("load first working tree: %v", err)
+	}
+	writeTestFile(t, root, "a.go", "package demo\n\nvar Value = 3\n")
+	second, err := LoadRepository(root)
+	if err != nil {
+		t.Fatalf("load second working tree: %v", err)
+	}
+
+	if first.Repository.Revision != second.Repository.Revision {
+		t.Fatalf("HEAD revision changed unexpectedly: %q vs %q", first.Repository.Revision, second.Repository.Revision)
+	}
+	if first.SnapshotID == second.SnapshotID {
+		t.Fatalf("working-tree snapshot id did not change with content: %q", first.SnapshotID)
 	}
 }
 
@@ -83,8 +108,8 @@ func TestLoadRepositoryFallsBackToLatestCommitWhenClean(t *testing.T) {
 	if snapshot.AgentTurn.ChangedFiles != 1 || snapshot.AgentTurn.Title != "Latest commit: document latest change" {
 		t.Fatalf("unexpected agent turn: %+v", snapshot.AgentTurn)
 	}
-	if snapshot.AgentTurn.ID != "commit-"+snapshot.Repository.Revision {
-		t.Fatalf("agent turn id = %q, revision = %q", snapshot.AgentTurn.ID, snapshot.Repository.Revision)
+	if snapshot.SnapshotID != "commit-"+snapshot.Repository.Revision || snapshot.AgentTurn.ID != snapshot.SnapshotID {
+		t.Fatalf("snapshot id = %q, agent turn id = %q, revision = %q", snapshot.SnapshotID, snapshot.AgentTurn.ID, snapshot.Repository.Revision)
 	}
 	if len(snapshot.Evidence) != 1 || !strings.Contains(snapshot.Evidence[0].Detail, "latest commit") {
 		t.Fatalf("unexpected evidence: %+v", snapshot.Evidence)

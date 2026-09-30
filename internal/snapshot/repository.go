@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"go/parser"
 	"go/token"
@@ -67,7 +68,7 @@ func LoadRepository(path string) (model.Snapshot, error) {
 	}
 	sourceLabel := "working tree"
 	title := "Working tree changes"
-	turnID := "worktree-" + revision
+	snapshotID := ""
 	baselineRef := "HEAD"
 	if len(stats) == 0 {
 		stats, err = latestCommitStats(root)
@@ -80,8 +81,13 @@ func LoadRepository(path string) (model.Snapshot, error) {
 		}
 		sourceLabel = "latest commit"
 		title = "Latest commit: " + subject
-		turnID = "commit-" + revision
+		snapshotID = "commit-" + revision
 		baselineRef = "HEAD^"
+	} else {
+		snapshotID, err = workingTreeSnapshotID(root, revision)
+		if err != nil {
+			return model.Snapshot{}, fmt.Errorf("fingerprint working tree: %w", err)
+		}
 	}
 
 	changedPaths := sortedKeys(stats)
@@ -115,12 +121,15 @@ func LoadRepository(path string) (model.Snapshot, error) {
 			detailPath = stat.previousPath + " → " + path
 		}
 		evidence = append(evidence, model.Evidence{
-			ID:       evidenceID,
-			Kind:     "diff",
-			Title:    "Changed " + path,
-			Detail:   fmt.Sprintf("%s · +%d −%d · %s", detailPath, stat.additions, stat.deletions, sourceLabel),
-			Status:   "changed",
-			TargetID: path,
+			ID:        evidenceID,
+			Kind:      "diff",
+			Title:     "Changed " + path,
+			Detail:    fmt.Sprintf("%s · +%d −%d · %s", detailPath, stat.additions, stat.deletions, sourceLabel),
+			Status:    "changed",
+			Basis:     "observed",
+			Source:    "git",
+			Freshness: "current",
+			TargetIDs: []string{path},
 		})
 
 		nodeIDs := []string{path}
@@ -149,6 +158,7 @@ func LoadRepository(path string) (model.Snapshot, error) {
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].ID < nodes[j].ID })
 
 	return model.Snapshot{
+		SnapshotID: snapshotID,
 		Repository: model.Repository{
 			ID:       filepath.Base(root),
 			Name:     filepath.Base(root),
@@ -156,15 +166,16 @@ func LoadRepository(path string) (model.Snapshot, error) {
 			Root:     root,
 		},
 		AgentTurn: model.AgentTurn{
-			ID:           turnID,
+			ID:           snapshotID,
 			Title:        title,
 			Status:       "review",
 			ChangedFiles: len(changedPaths),
 		},
-		Nodes:      nodes,
-		Edges:      analysis.edges,
-		Evidence:   evidence,
-		Candidates: candidates,
+		AgentEvents: []model.AgentEvent{},
+		Nodes:       nodes,
+		Edges:       analysis.edges,
+		Evidence:    evidence,
+		Candidates:  candidates,
 		Verification: model.Verification{
 			Status:  "unknown",
 			Command: "Not run for repository ingestion",
@@ -955,6 +966,54 @@ func countRegularFileLines(path string, maxBytes int64) (int, bool, error) {
 		contents = contents[:maxBytes]
 	}
 	return lineCount(contents), true, nil
+}
+
+func workingTreeSnapshotID(root, revision string) (string, error) {
+	hasher := sha256.New()
+	_, _ = io.WriteString(hasher, revision)
+	_, _ = hasher.Write([]byte{0})
+
+	diff, err := gitRawOutput(root, "diff", "--binary", "--full-index", "HEAD", "--")
+	if err != nil {
+		return "", err
+	}
+	_, _ = hasher.Write(diff)
+
+	untrackedOutput, err := gitRawOutput(root, "ls-files", "--others", "--exclude-standard", "-z")
+	if err != nil {
+		return "", err
+	}
+	untracked := nulSeparatedStrings(untrackedOutput)
+	sort.Strings(untracked)
+	for _, path := range untracked {
+		_, _ = hasher.Write([]byte{0})
+		_, _ = io.WriteString(hasher, path)
+		_, _ = hasher.Write([]byte{0})
+		fullPath := filepath.Join(root, filepath.FromSlash(path))
+		info, statErr := os.Lstat(fullPath)
+		if statErr != nil {
+			return "", statErr
+		}
+		if !info.Mode().IsRegular() {
+			_, _ = io.WriteString(hasher, info.Mode().String())
+			continue
+		}
+		file, openErr := os.Open(fullPath)
+		if openErr != nil {
+			return "", openErr
+		}
+		_, copyErr := io.Copy(hasher, file)
+		closeErr := file.Close()
+		if copyErr != nil {
+			return "", copyErr
+		}
+		if closeErr != nil {
+			return "", closeErr
+		}
+	}
+
+	digest := hasher.Sum(nil)
+	return fmt.Sprintf("worktree-%s-%x", revision, digest[:6]), nil
 }
 
 func addRelated(related map[string]map[string]struct{}, source, target string) {

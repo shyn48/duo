@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { decisionForTarget, evidenceForTarget, reviewActionLabel, selectTarget, targetForNode } from './review';
-import type { ReviewDecision, Snapshot, ReviewTarget } from './types';
+import { decisionForTarget, evidenceForTarget, eventsForTarget, reviewActionLabel, selectTarget, targetForNode } from './review';
+import type { AgentEvent, ReviewDecision, Snapshot, ReviewTarget } from './types';
 
 const snapshot: Snapshot = {
+  snapshotId: 'snapshot-abc123',
   repository: { id: 'fixture', name: 'vpay-backend', revision: 'abc123' },
   agentTurn: { id: 'turn-001', title: 'Add retries', status: 'review', changedFiles: 2 },
+  agentEvents: [],
   nodes: [],
   edges: [],
   evidence: [
-    { id: 'diff-payments', kind: 'diff', title: 'Payment diff', detail: '+8 -2', status: 'changed', targetId: 'payments' },
-    { id: 'test-payments', kind: 'test', title: 'Payment tests', detail: '1 failed', status: 'failed', targetId: 'payments' },
+    { id: 'diff-payments', kind: 'diff', title: 'Payment diff', detail: '+8 -2', status: 'changed', targetIds: ['payments'] },
+    { id: 'test-payments', kind: 'test', title: 'Payment tests', detail: '1 failed', status: 'failed', targetIds: ['payments'] },
   ],
   verification: { status: 'attention', passed: 1, failed: 1, command: 'go test ./...', elapsed: '1s' },
 };
@@ -62,5 +64,15 @@ describe('review surface helpers', () => {
     expect(decisionForTarget(decisions, 'payments')?.id).toBe('d3');
     expect(decisionForTarget(decisions, 'api')?.id).toBe('d2');
     expect(decisionForTarget(decisions, 'tests')).toBeUndefined();
+  });
+
+  it('resolves agent activity only through explicit target links', () => {
+    const events: AgentEvent[] = [
+      { id: 'e1', sequence: 1, kind: 'tool', title: 'Read payments', detail: 'read file', status: 'observed', basis: 'observed', source: 'read', freshness: 'current', targetIds: ['payments'], evidenceIds: ['agent-e1'] },
+      { id: 'e2', sequence: 2, kind: 'check', title: 'API check', detail: 'test api', status: 'passed', basis: 'observed', source: 'exec', freshness: 'current', targetIds: ['api'], evidenceIds: ['agent-e2'] },
+      { id: 'payments', sequence: 3, kind: 'claim', title: 'Collision', detail: 'same id as target', status: 'claimed', basis: 'claimed', source: 'agent', freshness: 'current', targetIds: ['api'], evidenceIds: [] },
+    ];
+
+    expect(eventsForTarget(events, targets[0]).map((event) => event.id)).toEqual(['e1']);
   });
 });

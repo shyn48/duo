@@ -1,0 +1,59 @@
+{
+  "id": "slice3-recorded-turn",
+  "title": "Add agent turn evidence",
+  "status": "review",
+  "source": "chat-on-steroids",
+  "snapshotId": "worktree-slice3-demo-state",
+  "events": [
+    {
+      "id": "read-repository",
+      "sequence": 10,
+      "kind": "tool",
+      "title": "Read repository ingestion",
+      "detail": "Inspected the Git-backed snapshot adapter before editing.",
+      "status": "observed",
+      "basis": "observed",
+      "source": "cos.read",
+      "targetIds": ["internal/snapshot/repository.go"]
+    },
+    {
+      "id": "patch-agent-evidence",
+      "sequence": 20,
+      "kind": "patch",
+      "title": "Patch agent evidence model",
+      "detail": "Connected normalized agent events to repository-backed review targets.",
+      "status": "changed",
+      "basis": "observed",
+      "source": "cos.apply_patch",
+      "targetIds": ["internal/snapshot/repository.go", "web/src/App.tsx"]
+    },
+    {
+      "id": "check-slice3",
+      "sequence": 30,
+      "kind": "check",
+      "title": "Run Slice 3 checks",
+      "detail": "Backend and frontend focused checks completed successfully.",
+      "status": "passed",
+      "basis": "observed",
+      "source": "cos.exec_command",
+      "targetIds": ["internal/snapshot/repository.go", "web/src/App.tsx"],
+      "check": {
+        "command": "go test ./... && npm test --prefix web -- --run",
+        "passed": 18,
+        "failed": 0,
+        "elapsed": "4s"
+      }
+    },
+    {
+      "id": "claim-slice3",
+      "sequence": 40,
+      "kind": "claim",
+      "title": "Agent completion claim",
+      "detail": "Agent-turn evidence is implemented and ready for review.",
+      "status": "claimed",
+      "basis": "claimed",
+      "source": "agent",
+      "targetIds": ["internal/snapshot/repository.go", "web/src/App.tsx"]
+    }
+  ]
+}

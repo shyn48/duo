@@ -13,8 +13,23 @@ type AgentTurn struct {
 	ID              string `json:"id"`
 	Title           string `json:"title"`
 	Status          string `json:"status"`
+	Source          string `json:"source,omitempty"`
 	ChangedFiles    int    `json:"changedFiles"`
 	CompletionClaim string `json:"completionClaim,omitempty"`
+}
+
+type AgentEvent struct {
+	ID          string   `json:"id"`
+	Sequence    int      `json:"sequence"`
+	Kind        string   `json:"kind"`
+	Title       string   `json:"title"`
+	Detail      string   `json:"detail"`
+	Status      string   `json:"status"`
+	Basis       string   `json:"basis"`
+	Source      string   `json:"source"`
+	Freshness   string   `json:"freshness"`
+	TargetIDs   []string `json:"targetIds"`
+	EvidenceIDs []string `json:"evidenceIds"`
 }
 
 type Node struct {
@@ -33,12 +48,15 @@ type Edge struct {
 }
 
 type Evidence struct {
-	ID       string `json:"id"`
-	Kind     string `json:"kind"`
-	Title    string `json:"title"`
-	Detail   string `json:"detail"`
-	Status   string `json:"status"`
-	TargetID string `json:"targetId,omitempty"`
+	ID        string   `json:"id"`
+	Kind      string   `json:"kind"`
+	Title     string   `json:"title"`
+	Detail    string   `json:"detail"`
+	Status    string   `json:"status"`
+	Basis     string   `json:"basis,omitempty"`
+	Source    string   `json:"source,omitempty"`
+	Freshness string   `json:"freshness,omitempty"`
+	TargetIDs []string `json:"targetIds,omitempty"`
 }
 
 type Verification struct {
@@ -90,8 +108,10 @@ type ReviewState struct {
 }
 
 type Snapshot struct {
+	SnapshotID   string            `json:"snapshotId"`
 	Repository   Repository        `json:"repository"`
 	AgentTurn    AgentTurn         `json:"agentTurn"`
+	AgentEvents  []AgentEvent      `json:"agentEvents"`
 	Nodes        []Node            `json:"nodes"`
 	Edges        []Edge            `json:"edges"`
 	Evidence     []Evidence        `json:"evidence"`

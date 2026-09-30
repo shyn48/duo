@@ -4,11 +4,13 @@ import "github.com/shyn48/duo/internal/model"
 
 func Fixture() model.Snapshot {
 	return model.Snapshot{
+		SnapshotID: "fixture-turn-001",
 		Repository: model.Repository{ID: "fixture-vpay", Name: "vpay-backend", Revision: "agent-turn-001"},
 		AgentTurn: model.AgentTurn{
 			ID: "turn-001", Title: "Add idempotent payment retries", Status: "review", ChangedFiles: 5,
 			CompletionClaim: "Implemented retry-safe payment processing and added tests.",
 		},
+		AgentEvents: []model.AgentEvent{},
 		Nodes: []model.Node{
 			{ID: "api", Label: "API", Kind: "component", Status: "related", FileCount: 5},
 			{ID: "domain", Label: "Domain", Kind: "component", Status: "related", FileCount: 8},
@@ -23,11 +25,11 @@ func Fixture() model.Snapshot {
 			{From: "tests", To: "payments", Kind: "verification", Status: "changed"},
 		},
 		Evidence: []model.Evidence{
-			{ID: "diff-payments", Kind: "diff", Title: "Changed payment retry path", Detail: "src/payments/retry.go · +84 −19", Status: "changed", TargetID: "payments"},
-			{ID: "diff-api", Kind: "diff", Title: "Payment API contract", Detail: "internal/api/payments.go · +12 −4", Status: "changed", TargetID: "api"},
-			{ID: "test-payments", Kind: "test", Title: "Payment retry tests", Detail: "14 passed · 1 failed", Status: "failed", TargetID: "payments"},
-			{ID: "test-api", Kind: "test", Title: "API contract tests", Detail: "18 passed · 0 failed", Status: "passed", TargetID: "api"},
-			{ID: "constraint-boundary", Kind: "constraint", Title: "Domain boundary", Detail: "Payments may depend on domain, not the reverse", Status: "attention", TargetID: "payments"},
+			{ID: "diff-payments", Kind: "diff", Title: "Changed payment retry path", Detail: "src/payments/retry.go · +84 −19", Status: "changed", Basis: "observed", Source: "fixture", Freshness: "recorded", TargetIDs: []string{"payments"}},
+			{ID: "diff-api", Kind: "diff", Title: "Payment API contract", Detail: "internal/api/payments.go · +12 −4", Status: "changed", Basis: "observed", Source: "fixture", Freshness: "recorded", TargetIDs: []string{"api"}},
+			{ID: "test-payments", Kind: "test", Title: "Payment retry tests", Detail: "14 passed · 1 failed", Status: "failed", Basis: "observed", Source: "fixture", Freshness: "recorded", TargetIDs: []string{"payments"}},
+			{ID: "test-api", Kind: "test", Title: "API contract tests", Detail: "18 passed · 0 failed", Status: "passed", Basis: "observed", Source: "fixture", Freshness: "recorded", TargetIDs: []string{"api"}},
+			{ID: "constraint-boundary", Kind: "constraint", Title: "Domain boundary", Detail: "Payments may depend on domain, not the reverse", Status: "attention", Basis: "observed", Source: "fixture", Freshness: "recorded", TargetIDs: []string{"payments"}},
 		},
 		Verification: model.Verification{Status: "attention", Passed: 141, Failed: 1, Command: "go test ./...", Elapsed: "26s"},
 		Candidates: []model.ReviewCandidate{

@@ -39,7 +39,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) Decisions() []model.ReviewDecision {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return append([]model.ReviewDecision(nil), s.decisions...)
+	return append([]model.ReviewDecision{}, s.decisions...)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -55,12 +55,37 @@ func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w, http.MethodGet)
 		return
 	}
-	targets, err := s.provider.RankReviewTargets(r.Context(), model.ReviewState{SnapshotID: s.snapshot.AgentTurn.ID, Candidates: cloneCandidates(s.snapshot.Candidates)})
+	targets, err := s.provider.RankReviewTargets(r.Context(), model.ReviewState{SnapshotID: s.snapshot.SnapshotID, Candidates: cloneCandidates(s.snapshot.Candidates)})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"snapshot": s.snapshot, "reviewTargets": targets, "decisions": s.Decisions()})
+	writeJSON(w, http.StatusOK, map[string]any{"snapshot": publicSnapshot(s.snapshot), "reviewTargets": publicReviewTargets(targets), "decisions": s.Decisions()})
+}
+
+func publicSnapshot(snapshot model.Snapshot) model.Snapshot {
+	result := snapshot
+	result.Nodes = append([]model.Node{}, snapshot.Nodes...)
+	result.Edges = append([]model.Edge{}, snapshot.Edges...)
+	result.Evidence = append([]model.Evidence{}, snapshot.Evidence...)
+	for index := range result.Evidence {
+		result.Evidence[index].TargetIDs = append([]string{}, snapshot.Evidence[index].TargetIDs...)
+	}
+	result.AgentEvents = append([]model.AgentEvent{}, snapshot.AgentEvents...)
+	for index := range result.AgentEvents {
+		result.AgentEvents[index].TargetIDs = append([]string{}, snapshot.AgentEvents[index].TargetIDs...)
+		result.AgentEvents[index].EvidenceIDs = append([]string{}, snapshot.AgentEvents[index].EvidenceIDs...)
+	}
+	return result
+}
+
+func publicReviewTargets(targets []model.ReviewTarget) []model.ReviewTarget {
+	result := append([]model.ReviewTarget{}, targets...)
+	for index := range result {
+		result[index].EvidenceIDs = append([]string{}, targets[index].EvidenceIDs...)
+		result[index].NodeIDs = append([]string{}, targets[index].NodeIDs...)
+	}
+	return result
 }
 
 func (s *Server) handleReviewDecision(w http.ResponseWriter, r *http.Request) {

@@ -29,8 +29,8 @@ Never force-push, rewrite history, delete the legacy tag, or restore the old MCP
 - Final Slice 1 frontend follow-up: `f6a874059fb02f6e9a1b3fa48a43cb156a03de0c`
 - Slice 2 repository ingestion: `508ff82023196771d911b1ca5adbe744c387fd1c`
 - Final Slice 2 TypeScript lexer follow-up: `346db2fd1872`
-- Slice 1 and Slice 2 product commits are pushed to `origin/main`; divergence was verified as `0 0` after the latest code push.
-- A newer documentation-only commit may exist after this handoff is committed. Treat `346db2f` as the clean Slice 2 product-code head.
+- Slice 3 agent-turn evidence: pending final commit in this handoff update.
+- Slice 1 and Slice 2 product commits are pushed to `origin/main`; Slice 3 is the current shipment.
 
 Start with:
 
@@ -118,16 +118,36 @@ The clean Slice 2 head passed `go test ./...`, `go test -race ./...`, `go vet ./
 
 Dogfood proof from a clean checkout: Atlas reported repository `duo-atlas` at revision `346db2fd1872`, turn `Latest commit: fix: handle declare global after TypeScript blocks`, two changed files plus their related dependency nodes/edges, and accepted a review-decision POST with HTTP 201. The real browser rendered the same latest-commit evidence and `Not assessed` policy signals with no console errors.
 
-## Current gate — Slice 3: agent turn evidence
+## Slice 3 — complete and reviewed
 
-Keep the real repository graph as the substrate. The next slice should:
+Atlas can now ingest a normalized recorded agent turn alongside the real repository snapshot. `cmd/atlas` accepts an optional `-agent-events <path>` JSON envelope and keeps repository state identity separate from the agent-turn identity.
 
-1. define a normalized local agent-turn event/envelope;
-2. ingest one recorded local agent transcript/event fixture;
-3. link tool calls, patches, checks and completion claims to repository graph targets;
-4. expose evidence freshness/source without mixing observed state with claims;
-5. render the agent timeline against the existing review target/evidence model;
-6. run the full review/fix/re-review loop before Jev integration.
+The agent adapter path:
+
+- validates a strict, bounded local JSON envelope containing ordered `tool`, `patch`, `check`, and `claim` events;
+- binds every event target to an existing repository graph node and rejects dangling targets;
+- records basis (`observed` versus `claimed`), source, and exact snapshot freshness on every event;
+- fingerprints dirty worktrees so freshness changes when repository contents change even if HEAD does not;
+- gives the public snapshot a dedicated immutable `snapshotId`, while `agentTurn.id` remains the trace/turn ID;
+- turns observed tool/check events into evidence, links patch events back to Git diff evidence, and keeps completion claims out of the observed evidence set while retaining their supporting-evidence references;
+- promotes verification only from current observed checks; stale checks and completion claims cannot make current verification pass;
+- renders target-scoped agent activity in the existing evidence panel with event status, source, basis, freshness, failure styling, and an explicit empty state;
+- normalizes public empty collections to JSON arrays so sparse snapshots cannot crash the React graph/timeline path.
+
+The clean Slice 3 tree passes `go test -race ./...`, `go vet ./...`, `go build ./cmd/atlas`, `npm test --prefix web -- --run` (11/11), `npm run build --prefix web`, `npm run lint --prefix web`, and `git diff --check`. Independent backend/frontend re-review closed snapshot identity, freshness, target-linking, claim/evidence separation, failed-check presentation, and provenance-wrapping findings.
+
+Runtime proof used a temporary real Git checkout plus a recorded four-event turn. The API returned current tool/patch/check/claim events, patch evidence linked to the real Git diff, claim support without claim-as-evidence, and verification derived from the observed check. The real Vite browser rendered the timeline with no application console errors, showed no desktop horizontal overflow, and the existing Approve flow still returned HTTP 201.
+
+## Current gate — Slice 4: Jev review prioritization
+
+Keep the repository graph and agent evidence as the substrate. The next slice should:
+
+1. implement the Go TypeSafe/Jev HTTP client with server-side credentials;
+2. add the Choice/Score request contract and strict response validation;
+3. send deterministic repository/agent evidence signals while preserving raw probabilities/confidence;
+4. keep a deterministic fallback when Jev is unavailable or uncertain;
+5. add recorded judgment fixtures/provider tests;
+6. run the full review/fix/re-review loop before architecture constraints/proposals.
 
 ## Product boundaries
 

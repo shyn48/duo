@@ -10,8 +10,10 @@ import type { SnapshotPayload } from './types';
 
 const payload: SnapshotPayload = {
   snapshot: {
+    snapshotId: 'snapshot-abc123',
     repository: { id: 'fixture', name: 'demo-repo', revision: 'abc123' },
     agentTurn: { id: 'turn-001', title: 'Review empty graph', status: 'blocked', changedFiles: 0 },
+    agentEvents: [],
     nodes: [],
     edges: [],
     evidence: [],
@@ -70,6 +72,7 @@ describe('Atlas app states', () => {
     expect(container.textContent).toContain('Blocked');
     expect(container.textContent).toContain('82% confidence');
     expect(container.textContent).toContain('No graph nodes in this snapshot.');
+    expect(container.textContent).toContain('No agent activity linked to this target.');
     expect(container.querySelector('.workflow-step.active')).toBeNull();
   });
 
@@ -124,5 +127,39 @@ describe('Atlas app states', () => {
     expect(container.textContent).toContain('1 file');
     expect(container.textContent).toContain('Not assessed');
     expect(container.textContent).not.toContain('ContractInternal');
+  });
+
+  it('renders target-scoped agent activity with claim and freshness semantics', async () => {
+    const activityPayload: SnapshotPayload = {
+      ...payload,
+      snapshot: {
+        ...payload.snapshot,
+        agentEvents: [
+          { id: 'read-payments', sequence: 10, kind: 'tool', title: 'Read payment file', detail: 'Inspected retry.go', status: 'observed', basis: 'observed', source: 'cos.read', freshness: 'current', targetIds: ['payments'], evidenceIds: ['agent-read-payments'] },
+          { id: 'claim-payments', sequence: 20, kind: 'claim', title: 'Completion claim', detail: 'All payment work is done.', status: 'claimed', basis: 'claimed', source: 'agent', freshness: 'stale', targetIds: ['payments'], evidenceIds: [] },
+          { id: 'check-api', sequence: 30, kind: 'check', title: 'API contract check', detail: 'API tests failed', status: 'failed', basis: 'observed', source: 'cos.exec_command', freshness: 'current', targetIds: ['api'], evidenceIds: ['agent-check-api'] },
+        ],
+      },
+      reviewTargets: [
+        { ...payload.reviewTargets[0], nodeIds: ['payments'] },
+        { ...payload.reviewTargets[0], id: 'api', label: 'API', rank: 2, nodeIds: ['api'] },
+      ],
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => okResponse(activityPayload)));
+    const container = await renderApp();
+
+    expect(container.textContent).toContain('Read payment file');
+    expect(container.textContent).toContain('Completion claim');
+    expect(container.textContent).toContain('Claimed · Claimed · agent · Stale');
+    expect(container.textContent).not.toContain('API contract check');
+
+    const apiRow = Array.from(container.querySelectorAll<HTMLButtonElement>('.review-row')).find((button) => button.textContent?.includes('API'));
+    expect(apiRow).toBeDefined();
+    await act(async () => apiRow?.click());
+
+    expect(container.textContent).toContain('API contract check');
+    expect(container.textContent).toContain('Failed · Observed · cos.exec_command · Current');
+    expect(container.querySelector('.timeline-row.check.failed')).not.toBeNull();
+    expect(container.textContent).not.toContain('Read payment file');
   });
 });

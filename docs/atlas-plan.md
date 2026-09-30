@@ -51,12 +51,12 @@ Work in vertical slices. For each slice:
 
 ### Slice 3 — Agent turn evidence
 
-- [ ] Define normalized agent adapter envelope.
-- [ ] Ingest one local agent transcript/event fixture.
-- [ ] Link tools, patches, checks and completion claims to graph targets.
-- [ ] Display the agent timeline and evidence freshness.
-- [ ] Review/fix loop until clean.
-- [ ] Commit and push to `main`.
+- [x] Define normalized agent adapter envelope.
+- [x] Ingest one local agent transcript/event fixture.
+- [x] Link tools, patches, checks and completion claims to graph targets.
+- [x] Display the agent timeline and evidence freshness.
+- [x] Review/fix loop until clean.
+- [ ] Commit and push to `main` (final shipment step).
 
 ### Slice 4 — Jev review prioritization
 
@@ -97,3 +97,7 @@ Re-review is clean: `go test -race ./...`, `go vet ./...`, `go build ./cmd/atlas
 Slice 2 is implemented in `508ff82`, with the final TypeScript declaration/regex lexer finding closed in `346db2f`. The repository adapter resolves the selected Git root and HEAD revision, ingests working-tree changes when present and the latest commit when clean, preserves rename/delete/baseline evidence, handles root and merge commits, uses NUL-safe Git path parsing, ignores Git-ignored generated sources, and projects local Go/TypeScript dependencies into the existing graph/review contract. Unsupported architecture-boundary and public-contract signals remain explicitly unassessed rather than inferred.
 
 Slice 2 re-review is clean: full Go tests and race tests, `go vet`, Go build, 9/9 frontend tests, frontend build/lint, and `git diff --check` pass. A clean-tree dogfood run on Duo Atlas itself reported repository `duo-atlas` at `346db2fd1872`, turn `Latest commit: fix: handle declare global after TypeScript blocks`, the two changed files plus related dependency nodes/edges, and a valid review decision POST returned 201. The real browser rendered the same latest-commit evidence and unassessed policy signals with no console errors.
+
+Slice 3 adds strict recorded-turn ingestion behind `-agent-events`, exact dirty-worktree snapshot IDs, explicit observed-versus-claimed event semantics, graph-node target validation, tool/check evidence, patch-to-Git-diff linkage, claim support without claim promotion, current-check verification, and a target-scoped frontend agent timeline with source/freshness/status metadata. Review fixes separated immutable repository snapshot identity from agent-turn identity, prevented stale checks from updating verification, rejected dangling event targets and oversized envelopes, normalized public empty collections to arrays, surfaced failed checks distinctly, and made provenance metadata wrap instead of truncate.
+
+Slice 3 validation is clean: `go test -race ./...`, `go vet ./...`, `go build ./cmd/atlas`, 11/11 frontend tests, frontend build/lint, and `git diff --check` pass. A real CLI/API/browser smoke with a temporary Git checkout and four-event recorded turn verified tool/patch/check/claim linkage, observed-check verification, no claim-as-evidence promotion, a 201 browser review decision, and no application console errors.
