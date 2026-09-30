@@ -29,8 +29,8 @@ Never force-push, rewrite history, delete the legacy tag, or restore the old MCP
 - Final Slice 1 frontend follow-up: `f6a874059fb02f6e9a1b3fa48a43cb156a03de0c`
 - Slice 2 repository ingestion: `508ff82023196771d911b1ca5adbe744c387fd1c`
 - Final Slice 2 TypeScript lexer follow-up: `346db2fd1872`
-- Slice 3 agent-turn evidence: pending final commit in this handoff update.
-- Slice 1 and Slice 2 product commits are pushed to `origin/main`; Slice 3 is the current shipment.
+- Slice 3 agent-turn evidence: `899bc77e0b45cc661d364410df7553031f8d5953`
+- Slice 1, Slice 2, and Slice 3 product commits are pushed to `origin/main`; divergence was verified as `0 0` after the Slice 3 push.
 
 Start with:
 

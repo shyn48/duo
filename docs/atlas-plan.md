@@ -56,7 +56,7 @@ Work in vertical slices. For each slice:
 - [x] Link tools, patches, checks and completion claims to graph targets.
 - [x] Display the agent timeline and evidence freshness.
 - [x] Review/fix loop until clean.
-- [ ] Commit and push to `main` (final shipment step).
+- [x] Commit and push to `main` (`899bc77`).
 
 ### Slice 4 — Jev review prioritization
 

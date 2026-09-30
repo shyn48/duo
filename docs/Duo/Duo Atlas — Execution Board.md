@@ -13,7 +13,7 @@ updated: 2026-09-22
 
 ## Current state
 
-- **Current slice:** Slice 4 — Jev review prioritization, ready to start after Slice 3 ships
+- **Current slice:** Slice 4 — Jev review prioritization, ready to start
 - **Checkout:** `/Users/shayanbalaee/code-stuff/Personal Projects/duo-atlas`
 - **Remote:** `https://github.com/shyn48/duo.git`
 - **Branch:** `main`
@@ -22,8 +22,8 @@ updated: 2026-09-22
 - **Cutover commit:** `527a068` — Atlas replaced the deprecated MCP product and was pushed to `main`
 - **Slice 1 review commits:** `f4216ef` + final frontend follow-up `f6a8740`, both pushed to `main`
 - **Slice 2 ingestion commits:** `508ff82` + final TypeScript lexer follow-up `346db2f`, both pushed to `main`
-- **Slice 3 agent evidence commit:** pending final shipment from the current reviewed tree
-- **Verified upstream divergence before Slice 3 work:** `0 0`
+- **Slice 3 agent evidence commit:** `899bc77`, pushed to `main`
+- **Verified upstream divergence after Slice 3 push:** `0 0`
 - **Next gate:** add Jev/TypeSafe review prioritization on top of repository + agent evidence while keeping deterministic fallback behavior
 
 ## Completed evidence
@@ -81,7 +81,7 @@ updated: 2026-09-22
 - [x] API empty-array normalization for sparse snapshots
 - [x] Full Go/web verification plus real CLI/API/browser smoke
 - [x] Review/fix/re-review until clean
-- [ ] Commit and push Slice 3
+- [x] Commit and push Slice 3 (`899bc77`)
 
 ## Slice 0 — Cutover, design and plan
 
@@ -108,7 +108,7 @@ updated: 2026-09-22
 - [x] Local agent event fixture
 - [x] Timeline, tools, patches, checks and evidence freshness
 - [x] Review/fix loop
-- [ ] Push to `main`
+- [x] Push to `main` (`899bc77`)
 
 ## Slice 4 — Jev review prioritization
 
@@ -158,7 +158,7 @@ Slice 2 is also clean. `508ff82` added the real Git-backed repository adapter an
 
 Slice 2 validation: `go test ./...`, `go test -race ./...`, `go vet ./...`, `go build ./cmd/atlas`, `npm test --prefix web` (9/9), `npm run build --prefix web`, `npm run lint --prefix web`, and `git diff --check` pass. From a clean checkout, Atlas ingested itself at revision `346db2fd1872`, reported the latest-commit turn and its two changed files plus related dependency nodes/edges, accepted a review decision with HTTP 201, and rendered the same evidence in the real browser with no console errors.
 
-Slice 3 is clean in the reviewed working tree. It adds a strict bounded `-agent-events` adapter, repository-state fingerprinting for dirty worktrees, a dedicated public `snapshotId`, ordered target-linked agent events, explicit observed/claimed basis, evidence source/freshness, check-derived verification, and the Agent activity timeline. Claims remain claims; patch events point to Git diff evidence; stale checks cannot update current verification. Review passes also closed unknown targets, check-status ambiguity, oversized envelope handling, JSON null-array crashes, failed-check UI semantics, and provenance truncation.
+Slice 3 is clean and shipped in `899bc77`. It adds a strict bounded `-agent-events` adapter, repository-state fingerprinting for dirty worktrees, a dedicated public `snapshotId`, ordered target-linked agent events, explicit observed/claimed basis, evidence source/freshness, check-derived verification, and the Agent activity timeline. Claims remain claims; patch events point to Git diff evidence; stale checks cannot update current verification. Review passes also closed unknown targets, check-status ambiguity, oversized envelope handling, JSON null-array crashes, failed-check UI semantics, and provenance truncation.
 
 Slice 3 validation: `go test -race ./...`, `go vet ./...`, `go build ./cmd/atlas`, `npm test --prefix web -- --run` (11/11), `npm run build --prefix web`, `npm run lint --prefix web`, and `git diff --check` pass. A real recorded-turn smoke rendered in Chrome with no application console errors and no desktop horizontal overflow; the existing review POST still returned 201. Independent backend and frontend final re-reviews report no remaining actionable findings once the dedicated snapshot identity fix is confirmed.
 
